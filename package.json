@@ -4,6 +4,7 @@
   "description": "Promptlog — Cursor-native session replay (Review + QA)",
   "type": "module",
   "scripts": {
+    "verify:persistence": "node scripts/verify-persistence.mjs",
     "start": "node promptlog/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

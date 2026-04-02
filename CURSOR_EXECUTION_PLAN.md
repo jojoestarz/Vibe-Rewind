@@ -35,6 +35,8 @@ Do all of this before writing any application code.
 
 ## Phase 1 — Hooks and database
 
+**Persistence:** Raw prompt rows are written to the store on every `beforeSubmitPrompt` (`on-prompt.js`); they do **not** wait for session end. If `stop` never runs, prompts remain queryable with `type`/scores still `null`.
+
 Build these files in order. Do not move to Phase 2 until the human gate passes.
 
 ### File 1: `.cursor/hooks.json`
@@ -143,6 +145,8 @@ Wait for confirmation before continuing.
 Build this file only after Phase 2 gate has passed.
 
 ### File: `.cursor/hooks/on-stop.js`
+
+**Scope of `stop`:** This hook only scores existing rows and writes `DECISIONS.md`; it does **not** create prompt log entries. Prompt text is already durable in the DB from `beforeSubmitPrompt`.
 
 This file runs when a Cursor agent session ends. It must:
 
@@ -299,6 +303,21 @@ If the user asks how to demo this, give them this script:
 4. Drag to the highest-influence prompt. Show it was a reversal that killed a subsystem and defined the final product.
 5. Show drift spiking at the scope creep prompt, then recovering after the reversal.
 6. "This is built entirely on a Cursor Hook — two JS files and a hooks.json. Entirely Cursor-native."
+
+---
+
+## Per-session logging vs session end — verification
+
+**Reminder:** `beforeSubmitPrompt` persists each prompt immediately; `stop` only scores and writes `DECISIONS.md`.
+
+From the **repo root** (`workspace_roots[0]`):
+
+1. **Persist without `stop`:** In Cursor agent mode, send a prompt but do not end the session. Then run `node -e "import('./promptlog/db.js').then(m => console.log(m.getAllSessions()))"` and `getSessionPrompts('<conversation_id>')`. Expect rows with `type`/`influence` still null until `stop` runs.
+2. **Survive UI close:** After (1), close the agent or lose `stop` if Cursor allows; query the DB again — rows inserted by `on-prompt.js` should still be on disk.
+3. **Enrich on `stop`:** End the session so `stop` fires; re-query `getSessionPrompts` — score columns fill when scoring runs; check `DECISIONS.md` under the workspace root.
+4. **Diagnostics:** Output panel → Hooks channel; validate `.cursor/hooks.json` and restart Cursor if hooks do not run.
+
+You can also run `npm run verify:persistence` (or `node scripts/verify-persistence.mjs`) for an automated analogue of (1)–(3) using piped hook stdin.
 
 ---
 

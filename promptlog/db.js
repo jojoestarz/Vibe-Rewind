@@ -8,12 +8,15 @@ const sessionsDir = path.join(cwd, 'sessions');
 let sqlite = false;
 /** @type {import('better-sqlite3').Database | null} */
 let db = null;
+/** @type {string | null} */
+let sqliteLoadError = null;
 
 try {
   const { default: Database } = await import('better-sqlite3');
   db = new Database(dbFilePath);
   sqlite = true;
-} catch {
+} catch (e) {
+  sqliteLoadError = e instanceof Error ? e.message : String(e);
   sqlite = false;
   if (!fs.existsSync(sessionsDir)) {
     fs.mkdirSync(sessionsDir, { recursive: true });
@@ -48,6 +51,44 @@ function execSchemaSqlite() {
 if (sqlite) {
   execSchemaSqlite();
 }
+
+// #region agent log
+function debugDbInit() {
+  const body = {
+    sessionId: '02a1b9',
+    timestamp: Date.now(),
+    location: 'db.js:init',
+    message: 'db_backend_resolved',
+    hypothesisId: 'H1',
+    data: {
+      cwd: process.cwd(),
+      sqlite,
+      dbFilePath,
+      PROMPTLOG_DB: process.env.PROMPTLOG_DB ?? null,
+      sessionsDir,
+      sqliteLoadError,
+    },
+  };
+  const line = JSON.stringify(body);
+  fetch('http://127.0.0.1:7781/ingest/2c6767ca-fab5-4d30-aecf-73e277b8b466', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': '02a1b9',
+    },
+    body: line,
+  }).catch(() => {});
+  try {
+    fs.appendFileSync(
+      '/home/ethan/Projects/Vibe-Rewind/.cursor/debug-02a1b9.log',
+      line + '\n'
+    );
+  } catch {
+    /* ignore */
+  }
+}
+debugDbInit();
+// #endregion
 
 export function ensureSchema() {
   if (sqlite) {
@@ -98,6 +139,8 @@ function findJsonByPromptRowId(rowId) {
 }
 
 export function insertPrompt(sessionId, seq, text, ts) {
+  const tsSafe =
+    typeof ts === 'number' && Number.isFinite(ts) && ts > 0 ? ts : Date.now();
   const repo = process.env.PROMPTLOG_REPO || null;
   if (sqlite) {
     db.prepare(
@@ -108,10 +151,11 @@ export function insertPrompt(sessionId, seq, text, ts) {
         prompt_count = sessions.prompt_count + 1,
         repo = COALESCE(excluded.repo, sessions.repo)
     `
-    ).run(sessionId, ts, repo);
+    ).run(sessionId, tsSafe, repo);
     db.prepare(
       `INSERT INTO prompts (session_id, seq, text, timestamp) VALUES (?, ?, ?, ?)`
-    ).run(sessionId, seq, text, ts);
+    ).run(sessionId, seq, text, tsSafe);
+    debugInsert(sessionId, seq, 'sqlite');
     return;
   }
 
@@ -120,7 +164,7 @@ export function insertPrompt(sessionId, seq, text, ts) {
     data = {
       session: {
         id: sessionId,
-        started_at: ts,
+        started_at: tsSafe,
         ended_at: null,
         repo,
         prompt_count: 0,
@@ -137,7 +181,7 @@ export function insertPrompt(sessionId, seq, text, ts) {
     session_id: sessionId,
     seq,
     text,
-    timestamp: ts,
+    timestamp: tsSafe,
     type: null,
     influence: null,
     drift: null,
@@ -145,7 +189,48 @@ export function insertPrompt(sessionId, seq, text, ts) {
     decision: null,
   });
   writeJsonStore(sessionId, data);
+  debugInsert(sessionId, seq, 'json');
 }
+
+// #region agent log
+function debugInsert(sessionId, seq, backend) {
+  const body = {
+    sessionId: '02a1b9',
+    timestamp: Date.now(),
+    location: 'db.js:insertPrompt',
+    message: 'row_written',
+    hypothesisId: backend === 'json' ? 'H3' : 'H1',
+    data: {
+      backend,
+      sessionId,
+      seq,
+      cwd: process.cwd(),
+      dbFilePath,
+      jsonPath:
+        backend === 'json'
+          ? path.join(sessionsDir, `${encodeURIComponent(sessionId)}.json`)
+          : null,
+    },
+  };
+  const line = JSON.stringify(body);
+  fetch('http://127.0.0.1:7781/ingest/2c6767ca-fab5-4d30-aecf-73e277b8b466', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': '02a1b9',
+    },
+    body: line,
+  }).catch(() => {});
+  try {
+    fs.appendFileSync(
+      '/home/ethan/Projects/Vibe-Rewind/.cursor/debug-02a1b9.log',
+      line + '\n'
+    );
+  } catch {
+    /* ignore */
+  }
+}
+// #endregion
 
 export function getSessionPrompts(sessionId) {
   if (sqlite) {
@@ -200,7 +285,9 @@ export function getAllSessions() {
   if (sqlite) {
     return db
       .prepare(
-        `SELECT id, started_at, ended_at, repo, prompt_count FROM sessions ORDER BY started_at DESC`
+        `SELECT s.id, s.started_at, s.ended_at, s.repo, s.prompt_count,
+          (SELECT p.text FROM prompts p WHERE p.session_id = s.id ORDER BY p.seq ASC LIMIT 1) AS first_prompt_text
+         FROM sessions s ORDER BY s.started_at DESC`
       )
       .all();
   }
@@ -209,7 +296,12 @@ export function getAllSessions() {
   for (const f of fs.readdirSync(sessionsDir)) {
     if (!f.endsWith('.json')) continue;
     const data = JSON.parse(fs.readFileSync(path.join(sessionsDir, f), 'utf8'));
-    if (data.session) out.push(data.session);
+    if (!data.session) continue;
+    const sorted = [...(data.prompts || [])].sort((a, b) => a.seq - b.seq);
+    out.push({
+      ...data.session,
+      first_prompt_text: sorted[0]?.text ?? null,
+    });
   }
   out.sort((a, b) => b.started_at - a.started_at);
   return out;

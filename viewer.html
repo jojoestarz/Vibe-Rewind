@@ -9,6 +9,7 @@
       --bg: #0f0f0f;
       --panel: #1a1a1a;
       --border: #2a2a2a;
+      --border-secondary: #333333;
       --text: #e8e6e3;
       --muted: #888780;
       --directive: #7f77dd;
@@ -27,8 +28,37 @@
       min-height: 100vh;
       padding: 1.25rem;
     }
-    h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 0.5rem; }
-    .sub { color: var(--muted); font-size: 0.875rem; margin-bottom: 1rem; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin: 0; }
+    .app-header { margin-bottom: 1rem; }
+    .header-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .header-row .titles { flex: 1 1 12rem; }
+    .sub { color: var(--muted); font-size: 0.875rem; margin: 0.35rem 0 0; }
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      padding: 0.35rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--panel);
+    }
+    .live-badge.live { color: var(--refinement); border-color: var(--refinement); }
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+    .live-badge.live .live-dot { background: var(--refinement); box-shadow: 0 0 8px rgba(29, 158, 117, 0.5); }
     label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.35rem; }
     select {
       width: 100%;
@@ -38,74 +68,67 @@
       color: var(--text);
       border: 1px solid var(--border);
       border-radius: 6px;
-      margin-bottom: 1.25rem;
     }
-    .scrub-wrap {
-      background: var(--panel);
+    select:focus {
+      outline: none;
+      border-color: var(--directive);
+      box-shadow: 0 0 0 2px rgba(127, 119, 221, 0.25);
+    }
+    .constellation-wrap {
+      overflow-x: auto;
+      width: 100%;
+      margin-bottom: 1rem;
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 1rem 1rem 0.75rem;
-      margin-bottom: 1rem;
+      background: var(--panel);
     }
-    .track {
-      position: relative;
-      height: 44px;
-      margin-top: 0.5rem;
-      cursor: pointer;
-      user-select: none;
+    #constellationCanvas {
+      display: block;
+      height: 320px;
+      cursor: crosshair;
     }
-    .track-fill {
-      position: absolute;
-      left: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      height: 6px;
-      border-radius: 3px;
-      background: linear-gradient(90deg, var(--directive), var(--refinement));
-      width: 0%;
+    .graph-tooltip {
+      position: fixed;
+      z-index: 50;
+      max-width: 280px;
+      padding: 0.5rem 0.65rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.75rem;
+      line-height: 1.35;
       pointer-events: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45);
     }
-    .track-line {
-      position: absolute;
-      left: 0;
-      right: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      height: 6px;
-      border-radius: 3px;
-      background: var(--border);
+    .graph-tooltip .tt-type {
+      display: inline-block;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
     }
-    .pip {
-      position: absolute;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      border: 2px solid var(--bg);
-      cursor: grab;
-    }
-    .pip.active { box-shadow: 0 0 0 3px rgba(127, 119, 221, 0.45); }
-    .playhead {
-      position: absolute;
-      top: -4px;
-      width: 3px;
-      height: 52px;
-      background: #fff;
-      border-radius: 2px;
-      transform: translateX(-50%);
-      pointer-events: none;
-      box-shadow: 0 0 8px rgba(255,255,255,0.35);
-    }
-    .row { display: flex; gap: 1rem; flex-wrap: wrap; }
-    .card {
-      flex: 1 1 280px;
+    .graph-tooltip .tt-preview { color: var(--muted); word-break: break-word; }
+    .detail-panel {
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 1rem;
+      margin-bottom: 1rem;
+      min-height: 5rem;
     }
-    .card h3 { margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .detail-placeholder {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin: 0;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+    }
+    @media (max-width: 720px) {
+      .detail-grid { grid-template-columns: 1fr; }
+    }
+    .detail-col h3 { margin: 0 0 0.65rem; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .detail-head { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.5rem; }
     .badge {
       display: inline-block;
       padding: 0.2rem 0.5rem;
@@ -123,19 +146,73 @@
     .drift-hot { color: #e85d5d; font-weight: 600; }
     .drift-warm { color: #d4a017; font-weight: 600; }
     .drift-cool { color: #1d9e75; font-weight: 600; }
-    .feed {
-      margin-top: 1rem;
+    .drift-context { font-size: 0.8rem; color: var(--muted); margin-top: 0.35rem; line-height: 1.35; }
+    .decision-box {
+      margin-top: 0.75rem;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid var(--border);
+      border-left-width: 4px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+    .tab-panel {
+      height: 200px;
+      display: flex;
+      flex-direction: column;
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 1rem;
+      margin-bottom: 1rem;
+      overflow: hidden;
     }
-    .feed h3 { margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; }
-    .feed-item { display: flex; gap: 0.5rem; align-items: flex-start; margin: 0.5rem 0; font-size: 0.9rem; }
-    .feed-item .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 0.35rem; flex-shrink: 0; }
-    .feed-item.past .dot { opacity: 1; }
-    .feed-item.future { opacity: 0.35; }
-    .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+    .tab-bar {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .tab {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: lowercase;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active {
+      color: var(--text);
+      background: var(--border-secondary);
+      border-bottom: 2px solid var(--directive);
+      margin-bottom: -1px;
+    }
+    .tab-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 0.5rem 0.65rem;
+    }
+    .tab-body.hidden { display: none; }
+    .tab-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-start;
+      padding: 0.45rem 0.5rem;
+      margin: 0 -0.25rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .tab-row:hover { background: var(--border-secondary); }
+    .tab-row.selected { background: var(--border-secondary); }
+    .tab-row .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 0.3rem; flex-shrink: 0; }
+    .tab-row .row-main { flex: 1; min-width: 0; }
+    .tab-row .row-sub { color: var(--muted); font-size: 0.75rem; margin-top: 0.2rem; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.25rem; }
     .actions button {
       background: var(--panel);
       color: var(--text);
@@ -146,32 +223,43 @@
       font-size: 0.85rem;
     }
     .actions button:hover { border-color: var(--directive); }
-    .demo-banner { background: #2a2410; border: 1px solid #ba7517; color: #f0e6c8; padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.8rem; margin-bottom: 1rem; display: none; }
-    .demo-banner.on { display: block; }
   </style>
 </head>
 <body>
-  <div id="demoBanner" class="demo-banner">Demo mode: using embedded seed session (API unreachable).</div>
-  <h1>Promptlog</h1>
-  <p class="sub">Review + QA — session replay</p>
-  <label for="sessionPick">Session</label>
-  <select id="sessionPick"></select>
-  <div class="scrub-wrap">
-    <div class="track" id="track" aria-label="Prompt timeline">
-      <div class="track-line"></div>
-      <div class="track-fill" id="trackFill"></div>
-      <div id="pips"></div>
-      <div class="playhead" id="playhead"></div>
+  <header class="app-header">
+    <div class="header-row">
+      <div class="titles">
+        <h1>Promptlog</h1>
+        <p class="sub" id="headerSub">Review + QA — session replay</p>
+      </div>
+      <div class="live-badge" id="liveBadge" aria-live="polite">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span id="liveBadgeText">demo mode</span>
+      </div>
     </div>
+    <label for="sessionPick">Session</label>
+    <select id="sessionPick"></select>
+  </header>
+
+  <div class="constellation-wrap" id="constellationWrap">
+    <canvas id="constellationCanvas" height="320" aria-label="Prompt constellation"></canvas>
   </div>
-  <div class="row">
-    <div class="card" id="promptCard"></div>
-    <div class="card" id="stateCard"></div>
+  <div id="graphTooltip" class="graph-tooltip" hidden></div>
+
+  <div class="detail-panel" id="detailPanel">
+    <p class="detail-placeholder" id="detailPlaceholder">Select a node to inspect</p>
+    <div id="detailContent" class="detail-grid" style="display:none"></div>
   </div>
-  <div class="feed">
-    <h3>Decision feed</h3>
-    <div id="decisionFeed"></div>
+
+  <div class="tab-panel">
+    <div class="tab-bar" role="tablist">
+      <button type="button" class="tab active" role="tab" aria-selected="true" data-tab="decisions" id="tabBtnDecisions">decisions</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="prompts" id="tabBtnPrompts">all prompts</button>
+    </div>
+    <div class="tab-body tab-decisions" id="tabDecisions" role="tabpanel"></div>
+    <div class="tab-body tab-prompts hidden" id="tabPrompts" role="tabpanel" hidden></div>
   </div>
+
   <div class="actions">
     <button type="button" id="btnInfluential">most influential prompt ↗</button>
     <button type="button" id="btnDecisions">generate DECISIONS.md ↗</button>
@@ -189,38 +277,68 @@
     };
 
     const SEED_SESSION = {
-      session: { id: "demo-session-a3f9", started_at: Date.now() - 2200000, ended_at: Date.now() - 100000, repo: "/projects/my-app", prompt_count: 8 },
+      session: {
+        id: 'demo-session-a3f9',
+        name: 'dashboard build',
+        started_at: Date.now() - 2200000,
+        ended_at: Date.now() - 100000,
+        repo: '/projects/my-app',
+        prompt_count: 8,
+      },
       prompts: [
-        { id:1, session_id:"demo-session-a3f9", seq:1, text:'"build me a dashboard for tracking cursor agent sessions"', timestamp: Date.now()-2200000, type:"directive", influence:91, drift:0, spec_coverage:18, decision:"Dashboard for agent sessions established as the top-level product goal." },
-        { id:2, session_id:"demo-session-a3f9", seq:2, text:'"make it show the files that were changed"', timestamp: Date.now()-1900000, type:"refinement", influence:44, drift:15, spec_coverage:31, decision:"File diff view added as a core feature." },
-        { id:3, session_id:"demo-session-a3f9", seq:3, text:'"actually can you add a graph like the one we saw earlier"', timestamp: Date.now()-1600000, type:"pivot", influence:78, drift:41, spec_coverage:29, decision:"Graph-based view replaces tabular layout; dashboard framing partially abandoned." },
-        { id:4, session_id:"demo-session-a3f9", seq:4, text:'"make the nodes draggable"', timestamp: Date.now()-1400000, type:"detail", influence:29, drift:44, spec_coverage:33, decision:"None." },
-        { id:5, session_id:"demo-session-a3f9", seq:5, text:'"add colour coding for different decision types"', timestamp: Date.now()-1100000, type:"refinement", influence:52, drift:47, spec_coverage:40, decision:"Type-based colour system introduced." },
-        { id:6, session_id:"demo-session-a3f9", seq:6, text:'"hmm can we also track which cursorrules triggered each one"', timestamp: Date.now()-800000, type:"scope_creep", influence:83, drift:68, spec_coverage:38, decision:"Rules-tracing subsystem scoped in — new feature not in original intent." },
-        { id:7, session_id:"demo-session-a3f9", seq:7, text:'"nevermind the rules thing, just show the prompt that caused each decision"', timestamp: Date.now()-500000, type:"reversal", influence:95, drift:55, spec_coverage:52, decision:"Rules-tracing killed. Prompt-to-decision linking introduced as the core concept." },
-        { id:8, session_id:"demo-session-a3f9", seq:8, text:'"add a scrubber so we can replay the session from any point"', timestamp: Date.now()-200000, type:"directive", influence:71, drift:52, spec_coverage:74, decision:"Scrubber/replay metaphor established as the primary UX. Product identity crystallised." }
-      ]
+        { id:1, session_id:'demo-session-a3f9', seq:1, text:'"build me a dashboard for tracking cursor agent sessions"', timestamp: Date.now()-2200000, type:'directive', influence:91, drift:0, spec_coverage:18, decision:'Dashboard for agent sessions established as the top-level product goal.' },
+        { id:2, session_id:'demo-session-a3f9', seq:2, text:'"make it show the files that were changed"', timestamp: Date.now()-1900000, type:'refinement', influence:44, drift:15, spec_coverage:31, decision:'File diff view added as a core feature.' },
+        { id:3, session_id:'demo-session-a3f9', seq:3, text:'"actually can you add a graph like the one we saw earlier"', timestamp: Date.now()-1600000, type:'pivot', influence:78, drift:41, spec_coverage:29, decision:'Graph-based view replaces tabular layout; dashboard framing partially abandoned.' },
+        { id:4, session_id:'demo-session-a3f9', seq:4, text:'"make the nodes draggable"', timestamp: Date.now()-1400000, type:'detail', influence:29, drift:44, spec_coverage:33, decision:'None.' },
+        { id:5, session_id:'demo-session-a3f9', seq:5, text:'"add colour coding for different decision types"', timestamp: Date.now()-1100000, type:'refinement', influence:52, drift:47, spec_coverage:40, decision:'Type-based colour system introduced.' },
+        { id:6, session_id:'demo-session-a3f9', seq:6, text:'"hmm can we also track which cursorrules triggered each one"', timestamp: Date.now()-800000, type:'scope_creep', influence:83, drift:68, spec_coverage:38, decision:'Rules-tracing subsystem scoped in — new feature not in original intent.' },
+        { id:7, session_id:'demo-session-a3f9', seq:7, text:'"nevermind the rules thing, just show the prompt that caused each decision"', timestamp: Date.now()-500000, type:'reversal', influence:95, drift:55, spec_coverage:52, decision:'Rules-tracing killed. Prompt-to-decision linking introduced as the core concept.' },
+        { id:8, session_id:'demo-session-a3f9', seq:8, text:'"add a scrubber so we can replay the session from any point"', timestamp: Date.now()-200000, type:'directive', influence:71, drift:52, spec_coverage:74, decision:'Scrubber/replay metaphor established as the primary UX. Product identity crystallised.' },
+      ],
     };
 
-    let sessionsList = [];
-    let currentSessionId = null;
-    let prompts = [];
-    let currentIndex = 0;
-    let useSeed = false;
-    let dragging = false;
+    const skipWords = new Set(['a', 'the', 'an', 'can', 'you', 'please', 'just']);
 
-    const sessionPick = document.getElementById('sessionPick');
-    const track = document.getElementById('track');
-    const trackFill = document.getElementById('trackFill');
-    const pipsEl = document.getElementById('pips');
-    const playhead = document.getElementById('playhead');
-    const promptCard = document.getElementById('promptCard');
-    const stateCard = document.getElementById('stateCard');
-    const decisionFeed = document.getElementById('decisionFeed');
-    const demoBanner = document.getElementById('demoBanner');
+    /** Session date line uses en-GB month abbrev + 24h time for stable demo copy. */
+    function formatSessionStart(ms) {
+      const d = new Date(ms);
+      const day = d.getDate();
+      const mon = d.toLocaleString('en-GB', { month: 'short' });
+      const hm = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+      return `${day} ${mon} · ${hm}`;
+    }
+
+    function tokenizeForName(text) {
+      return String(text || '')
+        .toLowerCase()
+        .split(/[\s.,;:!?'"()[\]{}–—-]+/)
+        .filter(Boolean);
+    }
+
+    function twoWordName(firstPromptText) {
+      const tokens = tokenizeForName(firstPromptText).filter((w) => !skipWords.has(w));
+      if (tokens.length === 0) return 'session';
+      if (tokens.length === 1) return tokens[0];
+      return `${tokens[0]} ${tokens[1]}`;
+    }
+
+    function sessionDisplayLabel(session, firstPromptText) {
+      const name = session.name || twoWordName(firstPromptText ?? session.first_prompt_text ?? '');
+      const date = formatSessionStart(session.started_at);
+      const n = session.prompt_count ?? '?';
+      return `${name} · ${date} · ${n} prompts`;
+    }
 
     function typeColor(t) {
       return TYPE_COLORS[t] || TYPE_COLORS.detail;
+    }
+
+    function hexToRgba(hex, a) {
+      const x = hex.replace('#', '');
+      const r = parseInt(x.slice(0, 2), 16);
+      const g = parseInt(x.slice(2, 4), 16);
+      const b = parseInt(x.slice(4, 6), 16);
+      return `rgba(${r},${g},${b},${a})`;
     }
 
     function influenceBarColor(v) {
@@ -248,130 +366,402 @@
       return 'drift-cool';
     }
 
-    function setIndex(i) {
-      if (!prompts.length) return;
-      currentIndex = Math.max(0, Math.min(prompts.length - 1, i));
-      renderScrubberVisuals();
-      renderPromptCard();
-      renderStateCard();
-      renderDecisionFeed();
+    function escapeHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    function renderScrubberVisuals() {
-      const n = prompts.length;
-      if (!n) {
-        pipsEl.innerHTML = '';
-        trackFill.style.width = '0%';
-        playhead.style.left = '0%';
-        return;
+    function getOriginalIntentSource(promptsSorted) {
+      const p1 = promptsSorted.find((p) => p.seq === 1) || promptsSorted[0];
+      if (!p1) return '';
+      const t = String(p1.text || '').trim();
+      const specLike = /^#/.test(t) || /spec:|goal:|intent:/i.test(t);
+      return specLike ? String(p1.text || '') : String(p1.text || '');
+    }
+
+    function truncateIntent(s, max) {
+      const m = max ?? 40;
+      if (!s) return '';
+      const one = s.replace(/\s+/g, ' ').trim();
+      if (one.length <= m) return one;
+      return one.slice(0, m) + '…';
+    }
+
+    function labelTimeForNode(promptTs, anchorMs) {
+      const p = new Date(promptTs);
+      const a = new Date(anchorMs);
+      const sameDay =
+        p.getFullYear() === a.getFullYear() &&
+        p.getMonth() === a.getMonth() &&
+        p.getDate() === a.getDate();
+      if (sameDay) {
+        return p.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
       }
-      const pct = n === 1 ? 100 : (currentIndex / (n - 1)) * 100;
-      trackFill.style.width = pct + '%';
-      playhead.style.left = pct + '%';
-      pipsEl.querySelectorAll('.pip').forEach((el, idx) => {
-        el.classList.toggle('active', idx === currentIndex);
-      });
+      const d = p.getDate();
+      const mon = p.toLocaleString('en-GB', { month: 'short' });
+      const hm = p.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+      return `${d} ${mon} ${hm}`;
     }
 
-    function buildPips() {
-      pipsEl.innerHTML = '';
+    let sessionsList = [];
+    let currentSessionRow = null;
+    let currentSessionId = null;
+    let prompts = [];
+    let selectedIndex = null;
+    let hoveredIndex = null;
+    let useSeed = false;
+    let layoutNodes = [];
+    let canvasCssWidth = 400;
+    let hoverRaf = null;
+    let hoverAnimStart = 0;
+
+    const sessionPick = document.getElementById('sessionPick');
+    const constellationWrap = document.getElementById('constellationWrap');
+    const canvas = document.getElementById('constellationCanvas');
+    const ctx = canvas.getContext('2d');
+    const graphTooltip = document.getElementById('graphTooltip');
+    const detailPanel = document.getElementById('detailPanel');
+    const detailPlaceholder = document.getElementById('detailPlaceholder');
+    const detailContent = document.getElementById('detailContent');
+    const tabDecisions = document.getElementById('tabDecisions');
+    const tabPrompts = document.getElementById('tabPrompts');
+    const liveBadge = document.getElementById('liveBadge');
+    const liveBadgeText = document.getElementById('liveBadgeText');
+    const headerSub = document.getElementById('headerSub');
+
+    function sessionAnchorMs() {
+      if (!prompts.length) return currentSessionRow?.started_at ?? Date.now();
+      const first = prompts[0];
+      return first?.timestamp ?? currentSessionRow?.started_at ?? Date.now();
+    }
+
+    function computeLayout() {
       const n = prompts.length;
+      const w = canvasCssWidth;
+      layoutNodes = [];
       if (!n) return;
-      const rect = track.getBoundingClientRect();
-      const w = rect.width || track.offsetWidth || 400;
-      prompts.forEach((p, idx) => {
-        const pip = document.createElement('div');
-        pip.className = 'pip';
-        const leftPct = n === 1 ? 50 : (idx / (n - 1)) * 100;
-        pip.style.left = leftPct + '%';
-        pip.style.background = typeColor(p.type);
-        pip.dataset.index = String(idx);
-        pip.addEventListener('pointerdown', (e) => {
-          e.stopPropagation();
-          setIndex(idx);
-        });
-        pipsEl.appendChild(pip);
-      });
+      for (let i = 0; i < n; i++) {
+        const p = prompts[i];
+        const inf = Math.min(100, Math.max(0, p.influence ?? 0));
+        const x = n === 1 ? w / 2 : 40 + (i / (n - 1)) * (w - 80);
+        const y = 260 - (inf / 100) * 200;
+        const r = 10 + inf / 10;
+        layoutNodes.push({ x, y, r, prompt: p, index: i });
+      }
     }
 
-    function renderPromptCard() {
-      const p = prompts[currentIndex];
-      if (!p) {
-        promptCard.innerHTML = '<h3>Prompt</h3><p class="muted">No prompts</p>';
+    function resizeCanvas() {
+      const n = prompts.length;
+      const containerW = constellationWrap.clientWidth || 400;
+      canvasCssWidth = Math.max(containerW, n * 90);
+      const cssH = 320;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(canvasCssWidth * dpr);
+      canvas.height = Math.round(cssH * dpr);
+      canvas.style.width = canvasCssWidth + 'px';
+      canvas.style.height = cssH + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      computeLayout();
+      drawConstellation();
+    }
+
+    function drawConstellation() {
+      const w = canvasCssWidth;
+      const h = 320;
+      ctx.clearRect(0, 0, w, h);
+      const nodes = layoutNodes;
+      if (!nodes.length) return;
+
+      const sel = selectedIndex;
+
+      for (let i = 0; i < nodes.length - 1; i++) {
+        const a = nodes[i];
+        const b = nodes[i + 1];
+        const col = typeColor(b.prompt.type);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = hexToRgba(col, 0.25);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      const anchor = sessionAnchorMs();
+      ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+
+      for (let i = 0; i < nodes.length; i++) {
+        const { x, y, r, prompt: p } = nodes[i];
+        const col = typeColor(p.type);
+        const isHover = hoveredIndex === i;
+        const fillA = isHover ? 0.6 : 0.3;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba(col, fillA);
+        ctx.fill();
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = col;
+        ctx.fill();
+
+        const ts = p.timestamp ?? anchor;
+        ctx.fillStyle = '#888780';
+        ctx.fillText(labelTimeForNode(ts, anchor), x, y + r + 14);
+      }
+
+      if (hoveredIndex != null && nodes[hoveredIndex]) {
+        const { x, y, r } = nodes[hoveredIndex];
+        const t = ((performance.now() - hoverAnimStart) % 300) / 300;
+        const ringR = r + t * 16;
+        const alpha = 1 - t;
+        ctx.beginPath();
+        ctx.arc(x, y, ringR, 0, Math.PI * 2);
+        ctx.strokeStyle = hexToRgba(typeColor(nodes[hoveredIndex].prompt.type), 0.35 * alpha);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      if (sel != null && nodes[sel]) {
+        const { x, y, r } = nodes[sel];
+        ctx.beginPath();
+        ctx.arc(x, y, r + 6, 0, Math.PI * 2);
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#e8e6e3';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      if (sel != null && nodes[sel]) {
+        const nx = nodes[sel].x;
+        ctx.save();
+        ctx.setLineDash([4, 6]);
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#2a2a2a';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(nx, 0);
+        ctx.lineTo(nx, h);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    function scheduleHoverDraw() {
+      if (hoverRaf != null) cancelAnimationFrame(hoverRaf);
+      hoverRaf = null;
+      if (hoveredIndex == null) {
+        drawConstellation();
         return;
       }
+      hoverAnimStart = performance.now();
+      function loop() {
+        drawConstellation();
+        if (hoveredIndex != null) hoverRaf = requestAnimationFrame(loop);
+        else hoverRaf = null;
+      }
+      hoverRaf = requestAnimationFrame(loop);
+    }
+
+    function hitTest(mx, my) {
+      for (let i = layoutNodes.length - 1; i >= 0; i--) {
+        const { x, y, r } = layoutNodes[i];
+        const dx = mx - x;
+        const dy = my - y;
+        if (dx * dx + dy * dy <= (r + 8) * (r + 8)) return i;
+      }
+      return null;
+    }
+
+    function updateTooltip(idx, clientX, clientY) {
+      if (idx == null || !layoutNodes[idx]) {
+        graphTooltip.hidden = true;
+        return;
+      }
+      const p = layoutNodes[idx].prompt;
+      const preview = String(p.text || '').slice(0, 60) + (String(p.text || '').length > 60 ? '…' : '');
+      graphTooltip.innerHTML =
+        `<span class="tt-type" style="color:${typeColor(p.type)}">${escapeHtml(p.type || '—')}</span><br/><span class="tt-preview">${escapeHtml(preview)}</span>`;
+      graphTooltip.hidden = false;
+      const rect = graphTooltip.getBoundingClientRect();
+      let left = clientX - rect.width / 2;
+      let top = clientY - rect.height - 12;
+      left = Math.max(8, Math.min(window.innerWidth - rect.width - 8, left));
+      top = Math.max(8, top);
+      graphTooltip.style.left = left + 'px';
+      graphTooltip.style.top = top + 'px';
+    }
+
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const idx = hitTest(mx, my);
+      if (idx !== hoveredIndex) {
+        hoveredIndex = idx;
+        scheduleHoverDraw();
+      }
+      updateTooltip(idx, e.clientX, e.clientY);
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      hoveredIndex = null;
+      if (hoverRaf != null) cancelAnimationFrame(hoverRaf);
+      hoverRaf = null;
+      graphTooltip.hidden = true;
+      drawConstellation();
+    });
+
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const idx = hitTest(mx, my);
+      if (idx != null) setSelectedIndex(idx);
+    });
+
+    function scrollCanvasToIndex(i) {
+      if (i == null || !layoutNodes[i]) return;
+      const wrap = constellationWrap;
+      const nodeX = layoutNodes[i].x;
+      const vw = wrap.clientWidth;
+      const target = nodeX - vw / 2;
+      wrap.scrollLeft = Math.max(0, Math.min(wrap.scrollWidth - vw, target));
+    }
+
+    function currentSessionLabel() {
+      if (!currentSessionRow) return '';
+      const ftp = currentSessionRow.first_prompt_text ?? prompts[0]?.text ?? '';
+      return sessionDisplayLabel(currentSessionRow, ftp);
+    }
+
+    function setSelectedIndex(i) {
+      if (!prompts.length) return;
+      selectedIndex = Math.max(0, Math.min(prompts.length - 1, i));
+      scrollCanvasToIndex(selectedIndex);
+      drawConstellation();
+      renderDetail();
+      renderTabs();
+      headerSub.textContent = currentSessionLabel();
+    }
+
+    function renderDetail() {
+      if (selectedIndex == null || !prompts[selectedIndex]) {
+        detailPlaceholder.style.display = 'block';
+        detailContent.style.display = 'none';
+        detailContent.innerHTML = '';
+        return;
+      }
+      detailPlaceholder.style.display = 'none';
+      detailContent.style.display = 'grid';
+      const p = prompts[selectedIndex];
       const inf = p.influence ?? 0;
       const barW = Math.min(100, Math.max(0, inf));
-      promptCard.innerHTML = `
-        <h3>Prompt</h3>
-        <span class="badge" style="background:${typeColor(p.type)}22;color:${typeColor(p.type)}">${p.type || '—'}</span>
-        <div class="prompt-text">${escapeHtml(String(p.text))}</div>
-        <div class="meta">${p.timestamp ? new Date(p.timestamp).toLocaleString() : ''}</div>
-        <div class="bar-wrap"><div class="bar-fill" style="width:${barW}%;background:${influenceBarColor(inf)}"></div></div>
-        <div class="meta">Influence: <strong>${inf}%</strong></div>
-      `;
-    }
-
-    function renderStateCard() {
-      const p = prompts[currentIndex];
-      if (!p) {
-        stateCard.innerHTML = '<h3>State</h3><p class="muted">—</p>';
-        return;
-      }
       const d = p.drift ?? 0;
       const sc = p.spec_coverage ?? 0;
       const pr = pivotRisk(d);
-      stateCard.innerHTML = `
-        <h3>State</h3>
-        <div class="state-line"><span class="state-label">Direction</span> ${escapeHtml(p.type || '—')}</div>
-        <div class="state-line"><span class="state-label">Vibe drift</span> <span class="${driftClass(d)}">${d}%</span></div>
-        <div class="state-line"><span class="state-label">Scope</span> ${scopeForType(p.type)}</div>
-        <div class="state-line"><span class="state-label">Spec coverage</span> ${sc}%</div>
-        <div class="state-line"><span class="state-label">Pivot risk</span> ${pr}</div>
+      const intentSrc = getOriginalIntentSource(prompts);
+      const intentShort = truncateIntent(intentSrc, 40);
+      const sessLbl = currentSessionLabel();
+
+      detailContent.innerHTML = `
+        <div class="detail-col">
+          <h3>Prompt</h3>
+          <div class="detail-head">${escapeHtml(sessLbl)} · P${p.seq}</div>
+          <span class="badge" style="background:${typeColor(p.type)}22;color:${typeColor(p.type)}">${escapeHtml(p.type || '—')}</span>
+          <div class="prompt-text">${escapeHtml(String(p.text))}</div>
+          <div class="meta">${p.timestamp ? escapeHtml(new Date(p.timestamp).toLocaleString()) : ''}</div>
+        </div>
+        <div class="detail-col">
+          <h3>Scores</h3>
+          <div class="state-line"><span class="state-label">Influence</span> <strong>${inf}%</strong></div>
+          <div class="bar-wrap"><div class="bar-fill" style="width:${barW}%;background:${influenceBarColor(inf)}"></div></div>
+          <div class="state-line"><span class="state-label">Vibe drift</span> <span class="${driftClass(d)}">${d}%</span></div>
+          <div class="bar-wrap"><div class="bar-fill" style="width:${d}%;background:${d >= 60 ? '#e85d5d' : d >= 40 ? '#d4a017' : '#1d9e75'}"></div></div>
+          <p class="drift-context">Drifted ${d}% from: &lsquo;${escapeHtml(intentShort)}&rsquo;</p>
+          <div class="state-line"><span class="state-label">Scope</span> ${escapeHtml(scopeForType(p.type))}</div>
+          <div class="state-line"><span class="state-label">Spec coverage</span> ${sc}%</div>
+          <div class="bar-wrap"><div class="bar-fill" style="width:${sc}%;background:#1d9e75"></div></div>
+          <div class="state-line"><span class="state-label">Pivot risk</span> ${escapeHtml(pr)}</div>
+          <div class="decision-box" style="border-left-color:${typeColor(p.type)}">${escapeHtml(String(p.decision || '—'))}</div>
+        </div>
       `;
     }
 
-    function renderDecisionFeed() {
-      const curSeq = prompts[currentIndex]?.seq ?? 0;
-      decisionFeed.innerHTML = '';
-      prompts.forEach((p) => {
-        const reached = p.seq <= curSeq;
+    function renderTabs() {
+      const selSeq = selectedIndex != null ? prompts[selectedIndex]?.seq : null;
+      tabDecisions.innerHTML = '';
+      prompts.forEach((p, idx) => {
         const row = document.createElement('div');
-        row.className = 'feed-item ' + (reached ? 'past' : 'future');
+        row.className = 'tab-row' + (p.seq === selSeq ? ' selected' : '');
+        row.dataset.index = String(idx);
         const dot = document.createElement('div');
         dot.className = 'dot';
         dot.style.background = typeColor(p.type);
-        const txt = document.createElement('div');
-        const dec = (p.influence ?? 0) >= 40 ? (p.decision || '—') : '(low influence)';
-        txt.textContent = `P${p.seq}: ${dec}`;
+        const main = document.createElement('div');
+        main.className = 'row-main';
+        main.innerHTML = `<strong>P${p.seq} · ${escapeHtml(p.type || '—')}</strong><div class="row-sub">${escapeHtml(String(p.decision || '—'))}</div>`;
         row.appendChild(dot);
-        row.appendChild(txt);
-        decisionFeed.appendChild(row);
+        row.appendChild(main);
+        row.addEventListener('click', () => setSelectedIndex(idx));
+        tabDecisions.appendChild(row);
+      });
+
+      tabPrompts.innerHTML = '';
+      prompts.forEach((p, idx) => {
+        const row = document.createElement('div');
+        row.className = 'tab-row' + (p.seq === selSeq ? ' selected' : '');
+        const preview = String(p.text || '').slice(0, 80) + (String(p.text || '').length > 80 ? '…' : '');
+        const dot = document.createElement('div');
+        dot.className = 'dot';
+        dot.style.background = typeColor(p.type);
+        const main = document.createElement('div');
+        main.className = 'row-main';
+        const ts = p.timestamp ? new Date(p.timestamp).toLocaleString() : '—';
+        main.innerHTML = `<strong>P${p.seq}</strong> <span class="badge" style="font-size:0.65rem;padding:0.1rem 0.35rem;background:${typeColor(p.type)}22;color:${typeColor(p.type)}">${escapeHtml(p.type || '—')}</span><div class="row-sub">${escapeHtml(ts)} — ${escapeHtml(preview)}</div>`;
+        row.appendChild(dot);
+        row.appendChild(main);
+        row.addEventListener('click', () => {
+          setSelectedIndex(idx);
+        });
+        tabPrompts.appendChild(row);
       });
     }
 
-    function escapeHtml(s) {
-      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    }
+    document.querySelectorAll('.tab-bar .tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        document.querySelectorAll('.tab-bar .tab').forEach((b) => {
+          b.classList.toggle('active', b === btn);
+          b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+        });
+        const showDec = tab === 'decisions';
+        tabDecisions.classList.toggle('hidden', !showDec);
+        tabDecisions.hidden = !showDec;
+        tabPrompts.classList.toggle('hidden', showDec);
+        tabPrompts.hidden = showDec;
+      });
+    });
 
     async function loadSessions() {
       useSeed = false;
-      demoBanner.classList.remove('on');
+      liveBadge.classList.remove('live');
+      liveBadgeText.textContent = 'demo mode';
       try {
         const r = await fetch('/api/sessions');
         if (!r.ok) throw new Error('bad status');
         sessionsList = await r.json();
         if (!Array.isArray(sessionsList) || sessionsList.length === 0) throw new Error('empty');
+        liveBadge.classList.add('live');
+        liveBadgeText.textContent = 'live';
       } catch {
         useSeed = true;
         sessionsList = [SEED_SESSION.session];
-        demoBanner.classList.add('on');
       }
       sessionPick.innerHTML = '';
       sessionsList.forEach((s) => {
         const opt = document.createElement('option');
         opt.value = s.id;
-        opt.textContent = `${s.id.slice(0, 12)}… · ${s.prompt_count ?? '?'} prompts`;
+        opt.textContent = sessionDisplayLabel(s, s.first_prompt_text);
         sessionPick.appendChild(opt);
       });
       if (sessionsList.length) {
@@ -382,24 +772,28 @@
     }
 
     async function loadSessionData(id) {
+      currentSessionRow = sessionsList.find((s) => s.id === id) || null;
+      selectedIndex = null;
       if (useSeed && id === SEED_SESSION.session.id) {
-        prompts = [...SEED_SESSION.prompts].sort((a,b) => a.seq - b.seq);
-        currentIndex = 0;
-        buildPips();
-        setIndex(0);
-        return;
+        prompts = [...SEED_SESSION.prompts].sort((a, b) => a.seq - b.seq);
+      } else {
+        try {
+          const r = await fetch('/api/session/' + encodeURIComponent(id));
+          if (!r.ok) throw new Error('bad');
+          const data = await r.json();
+          prompts = (data.prompts || []).slice().sort((a, b) => a.seq - b.seq);
+          if (data.session) currentSessionRow = data.session;
+        } catch {
+          prompts = [];
+        }
       }
-      try {
-        const r = await fetch('/api/session/' + encodeURIComponent(id));
-        if (!r.ok) throw new Error('bad');
-        const data = await r.json();
-        prompts = (data.prompts || []).slice().sort((a,b) => a.seq - b.seq);
-      } catch {
-        prompts = [];
-      }
-      currentIndex = 0;
-      buildPips();
-      setIndex(0);
+      detailPlaceholder.style.display = 'block';
+      detailContent.style.display = 'none';
+      detailContent.innerHTML = '';
+      headerSub.textContent = currentSessionRow ? sessionDisplayLabel(currentSessionRow, currentSessionRow.first_prompt_text ?? prompts[0]?.text) : 'Review + QA — session replay';
+      resizeCanvas();
+      renderTabs();
+      drawConstellation();
     }
 
     sessionPick.addEventListener('change', () => {
@@ -407,36 +801,14 @@
       loadSessionData(currentSessionId);
     });
 
-    track.addEventListener('pointerdown', (e) => {
-      if (e.target.classList.contains('pip')) return;
-      dragging = true;
-      track.setPointerCapture(e.pointerId);
-      moveFromEvent(e);
-    });
-    track.addEventListener('pointermove', (e) => {
-      if (!dragging) return;
-      moveFromEvent(e);
-    });
-    track.addEventListener('pointerup', (e) => {
-      dragging = false;
-      try { track.releasePointerCapture(e.pointerId); } catch (_) {}
-    });
-    track.addEventListener('pointercancel', () => { dragging = false; });
-
-    function moveFromEvent(e) {
-      const n = prompts.length;
-      if (!n) return;
-      const r = track.getBoundingClientRect();
-      const x = Math.min(Math.max(e.clientX - r.left, 0), r.width);
-      const t = r.width ? x / r.width : 0;
-      const idx = n === 1 ? 0 : Math.round(t * (n - 1));
-      setIndex(idx);
-    }
-
     window.addEventListener('resize', () => {
-      buildPips();
-      renderScrubberVisuals();
+      resizeCanvas();
     });
+
+    if (window.matchMedia) {
+      const mq = window.matchMedia('(resolution: 1dppx)');
+      mq.addEventListener?.('change', () => resizeCanvas());
+    }
 
     function sendPrompt(text) {
       if (typeof window.sendPrompt === 'function') {
@@ -456,7 +828,7 @@
       prompts.forEach((p, i) => {
         if ((p.influence ?? 0) > (prompts[best].influence ?? 0)) best = i;
       });
-      setIndex(best);
+      setSelectedIndex(best);
       sendPrompt('what was the most influential prompt in this session and why?');
     };
     document.getElementById('btnDecisions').onclick = () => {
@@ -468,9 +840,12 @@
       let maxD = -1;
       prompts.forEach((p, i) => {
         const d = p.drift ?? 0;
-        if (d > maxD) { maxD = d; best = i; }
+        if (d > maxD) {
+          maxD = d;
+          best = i;
+        }
       });
-      setIndex(best);
+      setSelectedIndex(best);
       sendPrompt('where did this session start to drift from the original spec?');
     };
 
