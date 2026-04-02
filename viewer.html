@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Promptlog — Session replay</title>
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --panel: #1a1a1a;
+      --border: #2a2a2a;
+      --text: #e8e6e3;
+      --muted: #888780;
+      --directive: #7f77dd;
+      --refinement: #1d9e75;
+      --pivot: #d85a30;
+      --reversal: #d85a30;
+      --scope_creep: #ba7517;
+      --detail: #888780;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 1.25rem;
+    }
+    h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 0.5rem; }
+    .sub { color: var(--muted); font-size: 0.875rem; margin-bottom: 1rem; }
+    label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.35rem; }
+    select {
+      width: 100%;
+      max-width: 28rem;
+      padding: 0.5rem 0.65rem;
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 1.25rem;
+    }
+    .scrub-wrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1rem 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .track {
+      position: relative;
+      height: 44px;
+      margin-top: 0.5rem;
+      cursor: pointer;
+      user-select: none;
+    }
+    .track-fill {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--directive), var(--refinement));
+      width: 0%;
+      pointer-events: none;
+    }
+    .track-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 6px;
+      border-radius: 3px;
+      background: var(--border);
+    }
+    .pip {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid var(--bg);
+      cursor: grab;
+    }
+    .pip.active { box-shadow: 0 0 0 3px rgba(127, 119, 221, 0.45); }
+    .playhead {
+      position: absolute;
+      top: -4px;
+      width: 3px;
+      height: 52px;
+      background: #fff;
+      border-radius: 2px;
+      transform: translateX(-50%);
+      pointer-events: none;
+      box-shadow: 0 0 8px rgba(255,255,255,0.35);
+    }
+    .row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .card {
+      flex: 1 1 280px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    .card h3 { margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .prompt-text { font-size: 0.95rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+    .meta { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
+    .bar-wrap { height: 8px; background: var(--border); border-radius: 4px; margin-top: 0.5rem; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; transition: width 0.15s ease; }
+    .state-line { margin: 0.35rem 0; font-size: 0.9rem; }
+    .state-label { color: var(--muted); display: inline-block; min-width: 7rem; }
+    .drift-hot { color: #e85d5d; font-weight: 600; }
+    .drift-warm { color: #d4a017; font-weight: 600; }
+    .drift-cool { color: #1d9e75; font-weight: 600; }
+    .feed {
+      margin-top: 1rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    .feed h3 { margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; }
+    .feed-item { display: flex; gap: 0.5rem; align-items: flex-start; margin: 0.5rem 0; font-size: 0.9rem; }
+    .feed-item .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 0.35rem; flex-shrink: 0; }
+    .feed-item.past .dot { opacity: 1; }
+    .feed-item.future { opacity: 0.35; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+    .actions button {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .actions button:hover { border-color: var(--directive); }
+    .demo-banner { background: #2a2410; border: 1px solid #ba7517; color: #f0e6c8; padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.8rem; margin-bottom: 1rem; display: none; }
+    .demo-banner.on { display: block; }
+  </style>
+</head>
+<body>
+  <div id="demoBanner" class="demo-banner">Demo mode: using embedded seed session (API unreachable).</div>
+  <h1>Promptlog</h1>
+  <p class="sub">Review + QA — session replay</p>
+  <label for="sessionPick">Session</label>
+  <select id="sessionPick"></select>
+  <div class="scrub-wrap">
+    <div class="track" id="track" aria-label="Prompt timeline">
+      <div class="track-line"></div>
+      <div class="track-fill" id="trackFill"></div>
+      <div id="pips"></div>
+      <div class="playhead" id="playhead"></div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="card" id="promptCard"></div>
+    <div class="card" id="stateCard"></div>
+  </div>
+  <div class="feed">
+    <h3>Decision feed</h3>
+    <div id="decisionFeed"></div>
+  </div>
+  <div class="actions">
+    <button type="button" id="btnInfluential">most influential prompt ↗</button>
+    <button type="button" id="btnDecisions">generate DECISIONS.md ↗</button>
+    <button type="button" id="btnDrift">find drift point ↗</button>
+  </div>
+
+  <script>
+    const TYPE_COLORS = {
+      directive: '#7F77DD',
+      refinement: '#1D9E75',
+      pivot: '#D85A30',
+      reversal: '#D85A30',
+      scope_creep: '#BA7517',
+      detail: '#888780',
+    };
+
+    const SEED_SESSION = {
+      session: { id: "demo-session-a3f9", started_at: Date.now() - 2200000, ended_at: Date.now() - 100000, repo: "/projects/my-app", prompt_count: 8 },
+      prompts: [
+        { id:1, session_id:"demo-session-a3f9", seq:1, text:'"build me a dashboard for tracking cursor agent sessions"', timestamp: Date.now()-2200000, type:"directive", influence:91, drift:0, spec_coverage:18, decision:"Dashboard for agent sessions established as the top-level product goal." },
+        { id:2, session_id:"demo-session-a3f9", seq:2, text:'"make it show the files that were changed"', timestamp: Date.now()-1900000, type:"refinement", influence:44, drift:15, spec_coverage:31, decision:"File diff view added as a core feature." },
+        { id:3, session_id:"demo-session-a3f9", seq:3, text:'"actually can you add a graph like the one we saw earlier"', timestamp: Date.now()-1600000, type:"pivot", influence:78, drift:41, spec_coverage:29, decision:"Graph-based view replaces tabular layout; dashboard framing partially abandoned." },
+        { id:4, session_id:"demo-session-a3f9", seq:4, text:'"make the nodes draggable"', timestamp: Date.now()-1400000, type:"detail", influence:29, drift:44, spec_coverage:33, decision:"None." },
+        { id:5, session_id:"demo-session-a3f9", seq:5, text:'"add colour coding for different decision types"', timestamp: Date.now()-1100000, type:"refinement", influence:52, drift:47, spec_coverage:40, decision:"Type-based colour system introduced." },
+        { id:6, session_id:"demo-session-a3f9", seq:6, text:'"hmm can we also track which cursorrules triggered each one"', timestamp: Date.now()-800000, type:"scope_creep", influence:83, drift:68, spec_coverage:38, decision:"Rules-tracing subsystem scoped in — new feature not in original intent." },
+        { id:7, session_id:"demo-session-a3f9", seq:7, text:'"nevermind the rules thing, just show the prompt that caused each decision"', timestamp: Date.now()-500000, type:"reversal", influence:95, drift:55, spec_coverage:52, decision:"Rules-tracing killed. Prompt-to-decision linking introduced as the core concept." },
+        { id:8, session_id:"demo-session-a3f9", seq:8, text:'"add a scrubber so we can replay the session from any point"', timestamp: Date.now()-200000, type:"directive", influence:71, drift:52, spec_coverage:74, decision:"Scrubber/replay metaphor established as the primary UX. Product identity crystallised." }
+      ]
+    };
+
+    let sessionsList = [];
+    let currentSessionId = null;
+    let prompts = [];
+    let currentIndex = 0;
+    let useSeed = false;
+    let dragging = false;
+
+    const sessionPick = document.getElementById('sessionPick');
+    const track = document.getElementById('track');
+    const trackFill = document.getElementById('trackFill');
+    const pipsEl = document.getElementById('pips');
+    const playhead = document.getElementById('playhead');
+    const promptCard = document.getElementById('promptCard');
+    const stateCard = document.getElementById('stateCard');
+    const decisionFeed = document.getElementById('decisionFeed');
+    const demoBanner = document.getElementById('demoBanner');
+
+    function typeColor(t) {
+      return TYPE_COLORS[t] || TYPE_COLORS.detail;
+    }
+
+    function influenceBarColor(v) {
+      if (v >= 80) return '#7F77DD';
+      if (v >= 50) return '#1D9E75';
+      if (v >= 30) return '#BA7517';
+      return '#888780';
+    }
+
+    function scopeForType(t) {
+      if (t === 'directive') return 'broad';
+      if (t === 'scope_creep' || t === 'pivot') return 'expanding';
+      return 'narrow';
+    }
+
+    function pivotRisk(drift) {
+      if (drift >= 60) return 'high';
+      if (drift >= 40) return 'medium';
+      return 'low';
+    }
+
+    function driftClass(d) {
+      if (d >= 60) return 'drift-hot';
+      if (d >= 40) return 'drift-warm';
+      return 'drift-cool';
+    }
+
+    function setIndex(i) {
+      if (!prompts.length) return;
+      currentIndex = Math.max(0, Math.min(prompts.length - 1, i));
+      renderScrubberVisuals();
+      renderPromptCard();
+      renderStateCard();
+      renderDecisionFeed();
+    }
+
+    function renderScrubberVisuals() {
+      const n = prompts.length;
+      if (!n) {
+        pipsEl.innerHTML = '';
+        trackFill.style.width = '0%';
+        playhead.style.left = '0%';
+        return;
+      }
+      const pct = n === 1 ? 100 : (currentIndex / (n - 1)) * 100;
+      trackFill.style.width = pct + '%';
+      playhead.style.left = pct + '%';
+      pipsEl.querySelectorAll('.pip').forEach((el, idx) => {
+        el.classList.toggle('active', idx === currentIndex);
+      });
+    }
+
+    function buildPips() {
+      pipsEl.innerHTML = '';
+      const n = prompts.length;
+      if (!n) return;
+      const rect = track.getBoundingClientRect();
+      const w = rect.width || track.offsetWidth || 400;
+      prompts.forEach((p, idx) => {
+        const pip = document.createElement('div');
+        pip.className = 'pip';
+        const leftPct = n === 1 ? 50 : (idx / (n - 1)) * 100;
+        pip.style.left = leftPct + '%';
+        pip.style.background = typeColor(p.type);
+        pip.dataset.index = String(idx);
+        pip.addEventListener('pointerdown', (e) => {
+          e.stopPropagation();
+          setIndex(idx);
+        });
+        pipsEl.appendChild(pip);
+      });
+    }
+
+    function renderPromptCard() {
+      const p = prompts[currentIndex];
+      if (!p) {
+        promptCard.innerHTML = '<h3>Prompt</h3><p class="muted">No prompts</p>';
+        return;
+      }
+      const inf = p.influence ?? 0;
+      const barW = Math.min(100, Math.max(0, inf));
+      promptCard.innerHTML = `
+        <h3>Prompt</h3>
+        <span class="badge" style="background:${typeColor(p.type)}22;color:${typeColor(p.type)}">${p.type || '—'}</span>
+        <div class="prompt-text">${escapeHtml(String(p.text))}</div>
+        <div class="meta">${p.timestamp ? new Date(p.timestamp).toLocaleString() : ''}</div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:${barW}%;background:${influenceBarColor(inf)}"></div></div>
+        <div class="meta">Influence: <strong>${inf}%</strong></div>
+      `;
+    }
+
+    function renderStateCard() {
+      const p = prompts[currentIndex];
+      if (!p) {
+        stateCard.innerHTML = '<h3>State</h3><p class="muted">—</p>';
+        return;
+      }
+      const d = p.drift ?? 0;
+      const sc = p.spec_coverage ?? 0;
+      const pr = pivotRisk(d);
+      stateCard.innerHTML = `
+        <h3>State</h3>
+        <div class="state-line"><span class="state-label">Direction</span> ${escapeHtml(p.type || '—')}</div>
+        <div class="state-line"><span class="state-label">Vibe drift</span> <span class="${driftClass(d)}">${d}%</span></div>
+        <div class="state-line"><span class="state-label">Scope</span> ${scopeForType(p.type)}</div>
+        <div class="state-line"><span class="state-label">Spec coverage</span> ${sc}%</div>
+        <div class="state-line"><span class="state-label">Pivot risk</span> ${pr}</div>
+      `;
+    }
+
+    function renderDecisionFeed() {
+      const curSeq = prompts[currentIndex]?.seq ?? 0;
+      decisionFeed.innerHTML = '';
+      prompts.forEach((p) => {
+        const reached = p.seq <= curSeq;
+        const row = document.createElement('div');
+        row.className = 'feed-item ' + (reached ? 'past' : 'future');
+        const dot = document.createElement('div');
+        dot.className = 'dot';
+        dot.style.background = typeColor(p.type);
+        const txt = document.createElement('div');
+        const dec = (p.influence ?? 0) >= 40 ? (p.decision || '—') : '(low influence)';
+        txt.textContent = `P${p.seq}: ${dec}`;
+        row.appendChild(dot);
+        row.appendChild(txt);
+        decisionFeed.appendChild(row);
+      });
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    async function loadSessions() {
+      useSeed = false;
+      demoBanner.classList.remove('on');
+      try {
+        const r = await fetch('/api/sessions');
+        if (!r.ok) throw new Error('bad status');
+        sessionsList = await r.json();
+        if (!Array.isArray(sessionsList) || sessionsList.length === 0) throw new Error('empty');
+      } catch {
+        useSeed = true;
+        sessionsList = [SEED_SESSION.session];
+        demoBanner.classList.add('on');
+      }
+      sessionPick.innerHTML = '';
+      sessionsList.forEach((s) => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.id.slice(0, 12)}… · ${s.prompt_count ?? '?'} prompts`;
+        sessionPick.appendChild(opt);
+      });
+      if (sessionsList.length) {
+        currentSessionId = sessionsList[0].id;
+        sessionPick.value = currentSessionId;
+        await loadSessionData(currentSessionId);
+      }
+    }
+
+    async function loadSessionData(id) {
+      if (useSeed && id === SEED_SESSION.session.id) {
+        prompts = [...SEED_SESSION.prompts].sort((a,b) => a.seq - b.seq);
+        currentIndex = 0;
+        buildPips();
+        setIndex(0);
+        return;
+      }
+      try {
+        const r = await fetch('/api/session/' + encodeURIComponent(id));
+        if (!r.ok) throw new Error('bad');
+        const data = await r.json();
+        prompts = (data.prompts || []).slice().sort((a,b) => a.seq - b.seq);
+      } catch {
+        prompts = [];
+      }
+      currentIndex = 0;
+      buildPips();
+      setIndex(0);
+    }
+
+    sessionPick.addEventListener('change', () => {
+      currentSessionId = sessionPick.value;
+      loadSessionData(currentSessionId);
+    });
+
+    track.addEventListener('pointerdown', (e) => {
+      if (e.target.classList.contains('pip')) return;
+      dragging = true;
+      track.setPointerCapture(e.pointerId);
+      moveFromEvent(e);
+    });
+    track.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      moveFromEvent(e);
+    });
+    track.addEventListener('pointerup', (e) => {
+      dragging = false;
+      try { track.releasePointerCapture(e.pointerId); } catch (_) {}
+    });
+    track.addEventListener('pointercancel', () => { dragging = false; });
+
+    function moveFromEvent(e) {
+      const n = prompts.length;
+      if (!n) return;
+      const r = track.getBoundingClientRect();
+      const x = Math.min(Math.max(e.clientX - r.left, 0), r.width);
+      const t = r.width ? x / r.width : 0;
+      const idx = n === 1 ? 0 : Math.round(t * (n - 1));
+      setIndex(idx);
+    }
+
+    window.addEventListener('resize', () => {
+      buildPips();
+      renderScrubberVisuals();
+    });
+
+    function sendPrompt(text) {
+      if (typeof window.sendPrompt === 'function') {
+        window.sendPrompt(text);
+        return;
+      }
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Copied to clipboard (sendPrompt not available):\n' + text);
+      }).catch(() => {
+        prompt('Copy:', text);
+      });
+    }
+
+    document.getElementById('btnInfluential').onclick = () => {
+      if (!prompts.length) return;
+      let best = 0;
+      prompts.forEach((p, i) => {
+        if ((p.influence ?? 0) > (prompts[best].influence ?? 0)) best = i;
+      });
+      setIndex(best);
+      sendPrompt('what was the most influential prompt in this session and why?');
+    };
+    document.getElementById('btnDecisions').onclick = () => {
+      sendPrompt('generate a DECISIONS.md from this session replay');
+    };
+    document.getElementById('btnDrift').onclick = () => {
+      if (!prompts.length) return;
+      let best = 0;
+      let maxD = -1;
+      prompts.forEach((p, i) => {
+        const d = p.drift ?? 0;
+        if (d > maxD) { maxD = d; best = i; }
+      });
+      setIndex(best);
+      sendPrompt('where did this session start to drift from the original spec?');
+    };
+
+    loadSessions();
+  </script>
+</body>
+</html>

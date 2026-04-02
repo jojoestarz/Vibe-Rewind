@@ -1,9 +1,10 @@
 {
   "name": "vibe-rewind",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Promptlog — Cursor-native session replay (Review + QA)",
+  "type": "module",
   "scripts": {
+    "start": "node promptlog/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -13,7 +14,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/jojoestarz/Vibe-Rewind/issues"
   },
