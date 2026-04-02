@@ -5,6 +5,8 @@
 **Team:** tbd  
 **Date:** 2026-04-02  
 
+**Agent execution:** The step-by-step build for Cursor (phases, human gates, hook `import.meta.url` rules, scorer API, viewer pixel spec, `SUBMISSION.md`) is normative in [`CURSOR_EXECUTION_PLAN.md`](CURSOR_EXECUTION_PLAN.md). Implement that document when coding; this file is the product/architecture source of truth.
+
 ---
 
 ## Problem
@@ -34,7 +36,7 @@ It supports the **Review + QA** track by providing a **review loop** on the prom
   hooks.json              ← registers hooks with Cursor
   hooks/
     on-prompt.js          ← beforeSubmitPrompt → append to SQLite
-    on-stop.js            ← stop → score via Claude API → write DECISIONS.md → open browser
+    on-stop.js            ← stop → score via Claude API → write DECISIONS.md → stderr: run npm start
 
 promptlog/
   db.js                   ← better-sqlite3 wrapper (2 tables)
@@ -43,7 +45,7 @@ promptlog/
   viewer.html             ← self-contained scrubber UI
   sessions/               ← fallback JSON files if SQLite unavailable
 
-DECISIONS.md              ← auto-written to repo root at session end
+DECISIONS.md              ← auto-written under workspace_roots[0] at session end (see execution plan)
 ```
 
 ---
@@ -65,8 +67,8 @@ User ends session (Cursor stop event)
   → Claude returns structured JSON array of scored prompts
   → UPDATE each prompt row with scores
   → INSERT/UPDATE sessions row with ended_at
-  → write DECISIONS.md to workspace root
-  → spawn: open http://localhost:3000 (or start server first if not running)
+  → write DECISIONS.md under workspace_roots[0]
+  → log to stderr: run `npm start` to open the replay UI (no auto-launch in MVP)
 ```
 
 ---
@@ -106,29 +108,12 @@ CREATE TABLE IF NOT EXISTS prompts (
 
 Single batch call at session end. Never called per-prompt.
 
+**Export:** `score(prompts, sessionIntent)` where `prompts` is `{ seq, text }[]` and `sessionIntent` is the first prompt’s text (see [`CURSOR_EXECUTION_PLAN.md`](CURSOR_EXECUTION_PLAN.md) Phase 2).
+
 **Model:** `claude-sonnet-4-6`  
 **Max tokens:** 2000  
 
-**System prompt:**
-```
-You are a session analyst for AI-assisted coding sessions. You receive an ordered list of prompts from a developer's Cursor session and return structured scoring for each one.
-
-For each prompt, score:
-- type: one of [directive, refinement, pivot, reversal, scope_creep, detail]
-  - directive: sets a new goal or intent
-  - refinement: narrows or clarifies an existing goal  
-  - pivot: changes direction mid-session (often starts with "actually", "wait", "hmm")
-  - reversal: undoes a previous direction ("nevermind", "ignore that")
-  - scope_creep: adds a new subsystem not in the original intent
-  - detail: small implementation detail, low impact
-- influence: 0–100. How much did this prompt shift what was ultimately built?
-- drift: 0–100. Cumulative distance from the FIRST prompt's intent. 0 = still aligned, 100 = unrecognisable.
-- spec_coverage: 0–100. How much of the final product's intent is now documented across all prompts so far?
-- decision: One sentence. What architectural or product decision did this prompt lock in? "None" if it locked in nothing.
-
-Return ONLY a JSON array, no markdown, no preamble:
-[{ "seq": 1, "type": "...", "influence": 0, "drift": 0, "spec_coverage": 0, "decision": "..." }, ...]
-```
+**System prompt:** Copy **verbatim** from [`CURSOR_EXECUTION_PLAN.md`](CURSOR_EXECUTION_PLAN.md) Phase 2 (kept in sync in [`SCORER_PROMPT.md`](SCORER_PROMPT.md)). Do not paraphrase in `scorer.js`.
 
 **User message:**
 ```json
@@ -153,8 +138,7 @@ GET /api/sessions             → [{ id, started_at, ended_at, repo, prompt_coun
 GET /api/session/:id          → { session, prompts: [...scored rows] }
 ```
 
-Started automatically by `on-stop.js` if not already running (checks port 3000).  
-Also accepts `node promptlog/server.js` manually.
+Start manually: `npm start` or `node promptlog/server.js` (see [`CURSOR_EXECUTION_PLAN.md`](CURSOR_EXECUTION_PLAN.md)).
 
 ---
 
@@ -162,23 +146,17 @@ Also accepts `node promptlog/server.js` manually.
 
 Self-contained HTML file. No build step, no bundler.
 
-**Features:**
-- Session picker dropdown (calls `GET /api/sessions`)
-- Scrubber timeline with colour-coded pips per prompt type
-- Per-prompt panel: text, type badge, influence bar, state card (direction / drift / spec coverage / pivot risk)
-- Decision feed: all decisions unlocked at current scrubber position
-- Three action buttons → `sendPrompt()` into Claude:
-  - "most influential prompt ↗"
-  - "generate DECISIONS.md ↗"  
-  - "find drift point ↗"
+**Features (summary):**
+- Session picker, scrubber timeline, prompt + state cards, decision feed, three action buttons (`sendPrompt` or clipboard fallback)
+- **Exact colours, layout rules, and `SEED_SESSION`:** [`CURSOR_EXECUTION_PLAN.md`](CURSOR_EXECUTION_PLAN.md) Phase 4.
 
-**Demo mode fallback:** If `fetch('/api/sessions')` fails (no local server), loads hardcoded seed data so the hosted demo URL works for judges.
+**Demo mode fallback:** If `fetch('/api/sessions')` fails (no local server), load hardcoded `SEED_SESSION` from the execution plan.
 
 ---
 
 ## DECISIONS.md output format
 
-Written to workspace root on session end:
+Written under **`workspace_roots[0]`** on session end (the Cursor workspace root for that session):
 
 ```markdown
 # Decisions — <session_id> · <date>
@@ -236,7 +214,7 @@ Only prompts with `influence >= 40` are written. Low-influence detail prompts ar
 | 0:00–0:30 | Scaffold repo, `npm init`, install `better-sqlite3` + `express` + `@anthropic-ai/sdk`. Wire `hooks.json`. Confirm `beforeSubmitPrompt` fires and logs stdin to console. | — |
 | 0:30–1:15 | `db.js` — create tables, `insertPrompt()`, `insertSession()`, `getSessionPrompts()`, `updatePromptScores()` | If install fails: flat JSON in `sessions/` folder |
 | 1:15–2:00 | `scorer.js` — Claude API call, parse JSON response, return array | Hardcode mock scores for demo |
-| 2:00–2:30 | `on-stop.js` — full pipeline: fetch unscored → score → update DB → write DECISIONS.md → open browser | — |
+| 2:00–2:30 | `on-stop.js` — full pipeline: fetch unscored → score → update DB → write DECISIONS.md → stderr hint to run server | — |
 | 2:30–3:15 | `server.js` — 3 routes + static viewer serving | — |
 | 3:15–4:30 | `viewer.html` — port scrubber widget, wire to `/api/session/:id`, session picker, demo fallback seed | — |
 | 4:30–5:00 | Seed a real session via Cursor, verify DECISIONS.md, deploy viewer to Vercel for demo URL | — |

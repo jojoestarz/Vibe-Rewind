@@ -13,16 +13,18 @@ promptlog/                        ← root of the project (git repo)
 │   ├── hooks.json                ← registers beforeSubmitPrompt + stop hooks
 │   └── hooks/
 │       ├── on-prompt.js          ← STEP 1: receives prompt via stdin, inserts to DB, returns {continue:true}
-│       └── on-stop.js            ← STEP 4: fetches prompts → scores → updates DB → writes DECISIONS.md → opens browser
+│       └── on-stop.js            ← STEP 4: fetches prompts → scores → updates DB → writes DECISIONS.md → stderr: npm start
 │
 ├── promptlog/
 │   ├── db.js                     ← STEP 2: SQLite wrapper (5 exported functions)
-│   ├── scorer.js                 ← STEP 3: Claude API call, returns scored array
+│   ├── scorer.js                 ← STEP 3: export score(prompts, sessionIntent) — one Claude batch, see execution plan
 │   └── server.js                 ← STEP 5: Express, 3 routes, serves viewer.html
 │
-├── viewer.html                   ← STEP 6: self-contained scrubber UI
+├── viewer.html                   ← STEP 6: self-contained scrubber UI (see CURSOR_EXECUTION_PLAN.md Phase 4)
 │
-└── DECISIONS.md                  ← auto-written by on-stop.js (gitignored or committed, user's choice)
+├── CURSOR_EXECUTION_PLAN.md      ← normative phased build + human gates for Cursor agent
+├── SUBMISSION.md                 ← created in Phase 5 (execution plan)
+└── DECISIONS.md                  ← auto-written under workspace root (gitignored per project choice)
 ```
 
 ## db.js exports (exactly these 5 functions)
@@ -31,7 +33,7 @@ promptlog/                        ← root of the project (git repo)
 export function ensureSchema()                          // create tables if not exists
 export function insertPrompt(sessionId, seq, text, ts)  // insert unscored row, upsert session
 export function getSessionPrompts(sessionId)            // returns all prompts for session, ordered by seq
-export function updatePromptScores(id, scores)          // { type, influence, drift, spec_coverage, decision }
+export function updatePromptScores(id, scores)          // id = prompts.id (row PK); scores = one object { type, influence, drift, spec_coverage, decision }; call once per scored prompt
 export function getAllSessions()                        // returns sessions ordered by started_at DESC
 ```
 
