@@ -1,13 +1,12 @@
-import './load-dotenv.js';
+import '../promptlog/load-dotenv.js';
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { attachPromptlogRoutes } from './routes.js';
+import { attachPromptlogRoutes } from '../promptlog/routes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
-const port = Number(process.env.PROMPTLOG_PORT) || 3000;
 
 const app = express();
 attachPromptlogRoutes(app);
@@ -21,6 +20,4 @@ app.get('/', (_req, res) => {
   res.sendFile(p);
 });
 
-app.listen(port, () => {
-  console.log(`Promptlog running at http://localhost:${port}`);
-});
+export default app;

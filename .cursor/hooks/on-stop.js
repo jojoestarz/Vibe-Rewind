@@ -20,24 +20,31 @@ try {
 
   const db = await import(new URL('../../promptlog/db.js', import.meta.url));
   const scorer = await import(new URL('../../promptlog/scorer.js', import.meta.url));
+  const { resolveIntent } = await import(
+    new URL('../../promptlog/intent-resolve.js', import.meta.url)
+  );
 
-  let prompts = db.getSessionPrompts(cid);
+  let prompts = await db.getSessionPrompts(cid);
   if (!prompts.length) {
     respondContinue();
   } else {
     prompts.sort((a, b) => a.seq - b.seq);
-    const intentSource = prompts.find((p) => p.seq === 1) ?? prompts[0];
-    const sessionIntent = intentSource.text;
+    let projectIntent = resolveIntent(workspaceRoot);
+    if (projectIntent == null || projectIntent.trim() === '') {
+      const first = prompts.find((p) => p.seq === 1) ?? prompts[0];
+      projectIntent = first?.text ?? '';
+    }
+    process.env.PROMPTLOG_PROJECT_INTENT = projectIntent;
 
     const unscored = prompts.filter((p) => p.type == null);
     if (unscored.length > 0) {
       const batch = unscored.map((p) => ({ seq: p.seq, text: p.text }));
-      const scored = await scorer.score(batch, sessionIntent);
+      const scored = await scorer.score(batch, projectIntent);
       const bySeq = new Map(scored.map((r) => [r.seq, r]));
       for (const p of unscored) {
         const r = bySeq.get(p.seq);
         if (!r) continue;
-        db.updatePromptScores(p.id, {
+        await db.updatePromptScores(p.id, {
           type: r.type,
           influence: r.influence,
           drift: r.drift,
@@ -47,7 +54,7 @@ try {
       }
     }
 
-    prompts = db.getSessionPrompts(cid);
+    prompts = await db.getSessionPrompts(cid);
     prompts.sort((a, b) => a.seq - b.seq);
 
     const peakDrift = prompts.reduce((m, p) => Math.max(m, p.drift ?? 0), 0);
@@ -62,7 +69,7 @@ try {
       const lines = [];
       lines.push(`# Decisions — ${cid} · ${new Date().toISOString().slice(0, 10)}`);
       lines.push('');
-      lines.push(`**Session intent:** ${sessionIntent}`);
+      lines.push(`**Project intent (drift anchor):** ${projectIntent}`);
       lines.push(
         `**Prompts:** ${prompts.length} · **Peak drift:** ${peakDrift}% · **Spec coverage:** ${finalSpec}%`
       );

@@ -35,15 +35,21 @@ It supports the **Review + QA** track by providing a **review loop** on the prom
 .cursor/
   hooks.json              ← registers hooks with Cursor
   hooks/
-    on-prompt.js          ← beforeSubmitPrompt → append to SQLite
-    on-stop.js            ← stop → score via Claude API → write DECISIONS.md → stderr: run npm start
+    on-prompt.js          ← beforeSubmitPrompt → append row via Supabase (db.js)
+    on-stop.js            ← stop → resolve project intent → score via Claude → sync intent → DECISIONS.md
 
 promptlog/
-  db.js                   ← better-sqlite3 wrapper (2 tables)
-  scorer.js               ← Claude API batch scoring call
-  server.js               ← Express: 3 routes + static viewer
-  viewer.html             ← self-contained scrubber UI
-  sessions/               ← fallback JSON files if SQLite unavailable
+  db.js                   ← Supabase only (projects, sessions, prompts)
+  intent-resolve.js       ← SPEC.md → PRD.md → README (500 chars) → .promptlog/intent.md
+  scorer.js               ← Claude API batch scoring (project_intent + influence_hints)
+  routes.js               ← Express route table (shared with Vercel api/index.js)
+  server.js               ← local Express + static viewer
+  load-dotenv.js
+
+api/index.js              ← Vercel serverless entry (same routes + viewer.html)
+
+viewer.html               ← self-contained UI (project → session, constellation, seed fallback)
+supabase/migrations/      ← Postgres schema
 
 DECISIONS.md              ← auto-written under workspace_roots[0] at session end (see execution plan)
 ```
@@ -57,50 +63,32 @@ User types prompt in Cursor
   → beforeSubmitPrompt hook fires
   → on-prompt.js receives JSON via stdin:
       { conversation_id, prompt_text, timestamp, workspace_roots }
-  → INSERT into prompts table (unscored row)
+  → INSERT into `prompts` (unscored row) under a `sessions` row linked to a `projects` row for `workspace_roots[0]`
   → return { continue: true } immediately (non-blocking)
 
 User ends session (Cursor stop event)
   → stop hook fires  
   → on-stop.js fetches all unscored prompts for conversation_id
-  → calls scorer.js → single Claude API call (claude-sonnet-4-6)
+  → resolves **project intent** (SPEC → PRD → README → `.promptlog/intent.md`, else first prompt) and syncs to `projects.intent_text`
+  → calls scorer.js → single Claude API call (claude-sonnet-4-6) with `project_intent` and per-prompt `influence_hints`
   → Claude returns structured JSON array of scored prompts
   → UPDATE each prompt row with scores
-  → INSERT/UPDATE sessions row with ended_at
+  → UPDATE sessions row with `ended_at` and `display_title` when all prompts scored
   → write DECISIONS.md under workspace_roots[0]
   → log to stderr: run `npm start` to open the replay UI (no auto-launch in MVP)
 ```
 
 ---
 
-## SQLite schema
+## Supabase / Postgres schema
 
-```sql
-CREATE TABLE IF NOT EXISTS sessions (
-  id TEXT PRIMARY KEY,          -- conversation_id from Cursor
-  started_at INTEGER NOT NULL,
-  ended_at INTEGER,
-  repo TEXT,                    -- workspace_roots[0]
-  prompt_count INTEGER DEFAULT 0
-);
+See [`supabase/migrations/20260403120000_promptlog.sql`](supabase/migrations/20260403120000_promptlog.sql).
 
-CREATE TABLE IF NOT EXISTS prompts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_id TEXT NOT NULL,
-  seq INTEGER NOT NULL,         -- order within session (1-indexed)
-  text TEXT NOT NULL,           -- the raw prompt
-  timestamp INTEGER NOT NULL,
-  -- scored fields (null until on-stop.js runs)
-  type TEXT,                    -- directive|refinement|pivot|reversal|scope_creep|detail
-  influence INTEGER,            -- 0–100
-  drift INTEGER,                -- 0–100 cumulative from session start
-  spec_coverage INTEGER,        -- 0–100
-  decision TEXT,                -- one-sentence architectural decision
-  FOREIGN KEY (session_id) REFERENCES sessions(id)
-);
-```
+- **`projects`:** `id` (uuid), `repo_path` (unique, normalized workspace root), `intent_text`, optional `display_name`, `created_at`.
+- **`sessions`:** `id` (text, Cursor `conversation_id`), `project_id` (fk), `started_at` / `ended_at` (epoch ms), `repo`, `prompt_count`, `display_title` (human-readable after scoring).
+- **`prompts`:** `id` (bigserial), `session_id`, `seq`, `text`, `timestamp`, scored columns (`type`, `influence`, `drift`, `spec_coverage`, `decision`) null until `stop`.
 
-**Escape hatch:** If `better-sqlite3` install fails, `db.js` switches to flat JSON files in `sessions/` — one file per `conversation_id`. All other files stay identical.
+**Persistence:** `promptlog/db.js` uses `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from `.env` (repo root). There is no local SQLite or JSON fallback.
 
 ---
 
@@ -108,7 +96,7 @@ CREATE TABLE IF NOT EXISTS prompts (
 
 Single batch call at session end. Never called per-prompt.
 
-**Export:** `score(prompts, sessionIntent)` where `prompts` is `{ seq, text }[]` and `sessionIntent` is the first prompt’s text (see [`CURSOR_EXECUTION_PLAN.md`](CURSOR_EXECUTION_PLAN.md) Phase 2).
+**Export:** `score(prompts, projectIntent)` where `prompts` is `{ seq, text }[]` and `projectIntent` is the fixed repo anchor string. The implementation attaches **`influence_hints`** per prompt before the API call (see [`promptlog/scorer.js`](promptlog/scorer.js)).
 
 **Model:** `claude-sonnet-4-6`  
 **Max tokens:** 2000  
@@ -118,24 +106,25 @@ Single batch call at session end. Never called per-prompt.
 **User message:**
 ```json
 {
-  "session_intent": "<first prompt text>",
+  "project_intent": "<resolved intent string>",
   "prompts": [
-    { "seq": 1, "text": "..." },
-    { "seq": 2, "text": "..." }
+    { "seq": 1, "text": "...", "influence_hints": ["actually"] },
+    { "seq": 2, "text": "...", "influence_hints": [] }
   ]
 }
 ```
 
 ---
 
-## Express server (server.js)
-
-Three routes only:
+## Express server (`promptlog/server.js` + `promptlog/routes.js`)
 
 ```
 GET /                         → serves viewer.html
-GET /api/sessions             → [{ id, started_at, ended_at, repo, prompt_count }]
-GET /api/session/:id          → { session, prompts: [...scored rows] }
+GET /api/health               → { ok, sessionCount }
+GET /api/projects             → [{ id, repo_path, intent_text, session_count, last_started_at }]
+GET /api/projects/:projectId/sessions → session rows for that project
+GET /api/sessions             → all sessions (joined project fields for viewer)
+GET /api/session/:id          → { session, prompts, project }
 ```
 
 Start manually: `npm start` or `node promptlog/server.js` (see [`CURSOR_EXECUTION_PLAN.md`](CURSOR_EXECUTION_PLAN.md)).
@@ -147,10 +136,14 @@ Start manually: `npm start` or `node promptlog/server.js` (see [`CURSOR_EXECUTIO
 Self-contained HTML file. No build step, no bundler.
 
 **Features (summary):**
-- Session picker, scrubber timeline, prompt + state cards, decision feed, three action buttons (`sendPrompt` or clipboard fallback)
-- **Exact colours, layout rules, and `SEED_SESSION`:** [`CURSOR_EXECUTION_PLAN.md`](CURSOR_EXECUTION_PLAN.md) Phase 4.
+- **Project** picker → **session** picker; project **intent** always visible in header; live vs demo badge (`/api/health`).
+- Constellation graph: idle pulse, path “comet” on session load, **edge colours** from drift deltas, click particle burst, horizontal scroll, hover tooltip.
+- Two-column detail panel + tabs (**decisions** = influence ≥ 40, **all prompts**); three action buttons (`sendPrompt` or clipboard fallback).
+- **`SEED_PROJECT` + `SEED_SESSION`** embedded for offline demo.
 
-**Demo mode fallback:** If `fetch('/api/sessions')` fails (no local server), load hardcoded `SEED_SESSION` from the execution plan.
+**Demo mode fallback:** If `/api/health` or `/api/projects` fails, use seed data.
+
+**Cursor:** **View → Simple Browser →** `http://localhost:3000` (with `npm start`).
 
 ---
 
@@ -161,7 +154,7 @@ Written under **`workspace_roots[0]`** on session end (the Cursor workspace root
 ```markdown
 # Decisions — <session_id> · <date>
 
-**Session intent:** <first prompt>  
+**Project intent (drift anchor):** <resolved intent>  
 **Prompts:** N · **Peak drift:** X% · **Spec coverage:** Y%
 
 ## Decisions
@@ -211,13 +204,13 @@ Only prompts with `influence >= 40` are written. Low-influence detail prompts ar
 
 | Time | Task | Escape hatch |
 |---|---|---|
-| 0:00–0:30 | Scaffold repo, `npm init`, install `better-sqlite3` + `express` + `@anthropic-ai/sdk`. Wire `hooks.json`. Confirm `beforeSubmitPrompt` fires and logs stdin to console. | — |
-| 0:30–1:15 | `db.js` — create tables, `insertPrompt()`, `insertSession()`, `getSessionPrompts()`, `updatePromptScores()` | If install fails: flat JSON in `sessions/` folder |
+| 0:00–0:30 | Scaffold repo, `npm init`, install `@supabase/supabase-js` + `express` + `@anthropic-ai/sdk`. Apply Supabase migration. Wire `hooks.json`. | — |
+| 0:30–1:15 | `db.js` — Supabase client, `ensureSchema` noop, five async exports | Set `SUPABASE_*` in `.env` |
 | 1:15–2:00 | `scorer.js` — Claude API call, parse JSON response, return array | Hardcode mock scores for demo |
 | 2:00–2:30 | `on-stop.js` — full pipeline: fetch unscored → score → update DB → write DECISIONS.md → stderr hint to run server | — |
 | 2:30–3:15 | `server.js` — 3 routes + static viewer serving | — |
 | 3:15–4:30 | `viewer.html` — port scrubber widget, wire to `/api/session/:id`, session picker, demo fallback seed | — |
-| 4:30–5:00 | Seed a real session via Cursor, verify DECISIONS.md, deploy viewer to Vercel for demo URL | — |
+| 4:30–5:00 | Seed a real session via Cursor, verify DECISIONS.md, `vercel deploy` (see `vercel.json` + `api/index.js`) | — |
 
 ---
 
@@ -242,10 +235,13 @@ Scan each captured prompt for injection patterns using White Circle's API. Surfa
 ## Environment variables
 
 ```
-ANTHROPIC_API_KEY=sk-ant-...     # required for scorer.js
-PROMPTLOG_DB=./promptlog.db      # optional, defaults to project root
+SUPABASE_URL=https://....supabase.co
+SUPABASE_SERVICE_ROLE_KEY=...    # server + Cursor hooks (keep secret)
+ANTHROPIC_API_KEY=sk-ant-...     # required for real scores in scorer.js
 PROMPTLOG_PORT=3000              # optional, defaults to 3000
 ```
+
+Copy [`.env.example`](.env.example) to `.env` in the repo root.
 
 ---
 
@@ -255,4 +251,4 @@ PROMPTLOG_PORT=3000              # optional, defaults to 3000
 - Cursor extension / webview (plain HTML server is faster)
 - Per-prompt scoring (too slow, too expensive)
 - Response capture (hooks expose prompts, not model responses)
-- Cloud sync
+- Productized multi-tenant cloud accounts (Supabase is persistence only, not auth/onboarding UX)

@@ -1,62 +1,58 @@
-import fs from 'fs';
-import path from 'path';
+import './load-dotenv.js';
 import Anthropic from '@anthropic-ai/sdk';
 
-function loadEnvFromDotenv() {
-  try {
-    const envPath = path.join(process.cwd(), '.env');
-    if (!fs.existsSync(envPath)) return;
-    const text = fs.readFileSync(envPath, 'utf8');
-    for (const line of text.split('\n')) {
-      const t = line.trim();
-      if (!t || t.startsWith('#')) continue;
-      const eq = t.indexOf('=');
-      if (eq === -1) continue;
-      const key = t.slice(0, eq).trim();
-      let val = t.slice(eq + 1).trim();
-      if (
-        (val.startsWith('"') && val.endsWith('"')) ||
-        (val.startsWith("'") && val.endsWith("'"))
-      ) {
-        val = val.slice(1, -1);
-      }
-      if (key && process.env[key] === undefined) process.env[key] = val;
-    }
-  } catch {
-    /* ignore */
+const INFLUENCE_HINT_PHRASES = [
+  'actually',
+  'wait',
+  'nevermind',
+  'hmm',
+  'can we instead',
+  'forget',
+  'scrap',
+  'ignore that',
+];
+
+function influenceHintsForText(text) {
+  const s = String(text || '').toLowerCase();
+  const flags = [];
+  for (const phrase of INFLUENCE_HINT_PHRASES) {
+    if (s.includes(phrase)) flags.push(phrase);
   }
+  return flags;
 }
 
-loadEnvFromDotenv();
-
-const SYSTEM_PROMPT = `You are a session analyst for AI-assisted coding sessions. You receive an ordered list of prompts from a developer's Cursor session and return structured scoring for each one.
+const SYSTEM_PROMPT = `You are a session analyst for AI-assisted coding sessions. You receive a fixed project_intent string (the authoritative product/spec anchor for this repo) and an ordered list of prompts. Each prompt includes influence_hints: phrases detected in the text that often signal pivots or reversals — use them as weak priors when calibrating type and influence, not as hard rules.
 
 For each prompt, score:
 
 - type: one of [directive, refinement, pivot, reversal, scope_creep, detail]
   - directive: sets a new goal or intent
   - refinement: narrows or clarifies an existing goal
-  - pivot: changes direction mid-session (often starts with "actually", "wait", "hmm", "can we")
-  - reversal: undoes a previous direction ("nevermind", "ignore that", "forget the")
-  - scope_creep: adds a new subsystem not present in the original intent
+  - pivot: changes direction mid-session (often aligns with influence_hints like "actually", "wait", "hmm", "can we instead")
+  - reversal: undoes a previous direction (often aligns with "nevermind", "ignore that", "forget", "scrap")
+  - scope_creep: adds a new subsystem not present in the project_intent
   - detail: small implementation detail, low architectural impact
 
 - influence: 0-100. How much did this prompt shift what was ultimately built?
-- drift: 0-100 cumulative. Distance from the first prompt's intent. Always >= previous prompt's drift unless a reversal corrects it. First prompt is always 0.
-- spec_coverage: 0-100 cumulative. How much of the final product's intent is now captured across all prompts so far. Generally increases over time.
+- drift: 0-100 cumulative. Semantic distance from the fixed project_intent (not from the first prompt). The first prompt may have non-zero drift if it already diverges from project_intent. Generally drift should not decrease sharply except after a genuine reversal that realigns with project_intent.
+- spec_coverage: 0-100 cumulative. How much of the key concepts and requirements implied by project_intent appear to be addressed or reflected across all prompts so far (not vague "product intent" — tie scores explicitly to project_intent). Generally increases as the session covers more of that intent.
 - decision: one sentence. What architectural or product decision did this prompt lock in? Write "None" if it locked in nothing.
 
 Return ONLY a valid JSON array. No markdown, no explanation, no preamble.
 Format: [{"seq":1,"type":"...","influence":0,"drift":0,"spec_coverage":0,"decision":"..."}]`;
 
-function mockScores(prompts) {
+function mockScores(prompts, reason = 'api') {
+  const decision =
+    reason === 'no_key'
+      ? 'Mock score — ANTHROPIC_API_KEY missing; add it to .env in the repo root (same folder as promptlog/).'
+      : 'Mock score — Claude request failed (billing/credits, network, or invalid model JSON). Check Cursor hook stderr for the real error.';
   return prompts.map((p) => ({
     seq: p.seq,
     type: 'detail',
     influence: 50,
     drift: 20,
     spec_coverage: 30,
-    decision: 'Mock score — API unavailable.',
+    decision,
   }));
 }
 
@@ -74,15 +70,79 @@ function parseScoresArray(text) {
   }
 }
 
+const TYPES = new Set([
+  'directive',
+  'refinement',
+  'pivot',
+  'reversal',
+  'scope_creep',
+  'detail',
+]);
+
+function asFiniteNumber(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return NaN;
+}
+
+function scoreRowLooksValid(r) {
+  if (!r || typeof r.seq !== 'number') return false;
+  if (!TYPES.has(String(r.type))) return false;
+  for (const k of ['influence', 'drift', 'spec_coverage']) {
+    if (!Number.isFinite(asFiniteNumber(r[k]))) return false;
+  }
+  if (r.decision == null || String(r.decision).trim() === '') return false;
+  return true;
+}
+
+function normalizeScoreRow(r) {
+  return {
+    seq: r.seq,
+    type: String(r.type),
+    influence: asFiniteNumber(r.influence),
+    drift: asFiniteNumber(r.drift),
+    spec_coverage: asFiniteNumber(r.spec_coverage),
+    decision: String(r.decision),
+  };
+}
+
+function scoresCoverBatch(batch, arr) {
+  if (!Array.isArray(arr)) return false;
+  const bySeq = new Map(arr.map((r) => [r.seq, r]));
+  return batch.every((p) => scoreRowLooksValid(bySeq.get(p.seq)));
+}
+
 /**
  * @param {{ seq: number, text: string }[]} prompts
- * @param {string} sessionIntent
+ * @param {string} projectIntent fixed project/spec anchor (never empty — caller should fallback)
  */
-export async function score(prompts, sessionIntent) {
+export async function score(prompts, projectIntent) {
   if (!prompts?.length) return [];
 
+  const batch = prompts.map((p) => ({
+    seq: p.seq,
+    text: p.text,
+    influence_hints: influenceHintsForText(p.text),
+  }));
+
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!apiKey) {
+    console.error(
+      'Promptlog scorer: ANTHROPIC_API_KEY missing after loading repo .env — check .env in repo root (next to promptlog/).'
+    );
+    return mockScores(prompts, 'no_key');
+  }
+
+  const intent =
+    projectIntent && String(projectIntent).trim() !== ''
+      ? String(projectIntent).trim()
+      : '(no project intent file — treat drift relative to an empty anchor and prefer conservative scores)';
+
   try {
-    const client = new Anthropic();
+    const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 2000,
@@ -91,19 +151,35 @@ export async function score(prompts, sessionIntent) {
         {
           role: 'user',
           content: JSON.stringify({
-            session_intent: sessionIntent,
-            prompts,
+            project_intent: intent,
+            prompts: batch,
           }),
         },
       ],
     });
 
     const block = response.content[0];
-    if (block.type !== 'text') return mockScores(prompts);
-    const arr = parseScoresArray(block.text);
-    if (!Array.isArray(arr)) return mockScores(prompts);
-    return arr;
-  } catch {
-    return mockScores(prompts);
+    if (block.type !== 'text') {
+      console.error('Promptlog scorer: expected text block, got', block?.type);
+      return mockScores(prompts, 'api');
+    }
+    let arr;
+    try {
+      arr = parseScoresArray(block.text);
+    } catch (e) {
+      console.error('Promptlog scorer: JSON parse failed:', e?.message || e);
+      return mockScores(prompts, 'api');
+    }
+    if (!scoresCoverBatch(prompts, arr)) {
+      console.error(
+        'Promptlog scorer: model JSON missing seqs or invalid fields; first 200 chars:',
+        String(block.text).slice(0, 200)
+      );
+      return mockScores(prompts, 'api');
+    }
+    return arr.map((r) => normalizeScoreRow(r));
+  } catch (e) {
+    console.error('Promptlog scorer:', e?.message || e);
+    return mockScores(prompts, 'api');
   }
 }

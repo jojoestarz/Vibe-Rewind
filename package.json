@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "description": "Promptlog — Cursor-native session replay (Review + QA)",
   "type": "module",
+  "bin": {
+    "promptlog": "./bin/promptlog.mjs"
+  },
   "scripts": {
     "verify:persistence": "node scripts/verify-persistence.mjs",
+    "promptlog:init": "node bin/promptlog.mjs init",
     "start": "node promptlog/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -21,7 +25,7 @@
   "homepage": "https://github.com/jojoestarz/Vibe-Rewind#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
-    "better-sqlite3": "^12.8.0",
+    "@supabase/supabase-js": "^2.101.1",
     "express": "^5.2.1"
   }
 }

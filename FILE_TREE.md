@@ -1,41 +1,64 @@
 # Promptlog — file tree
 
-Every file that needs to be created, in build order.
+Every primary file, in rough dependency order.
 
 ```
-promptlog/                        ← root of the project (git repo)
+promptlog/                        ← git repo root
 │
-├── package.json                  ← { "type": "module" }, deps: express, better-sqlite3, @anthropic-ai/sdk
-├── .env                          ← ANTHROPIC_API_KEY (gitignored)
-├── .gitignore                    ← node_modules, .env, promptlog.db
+├── package.json                  ← { "type": "module" }, bin: promptlog, deps: express, @supabase/supabase-js, @anthropic-ai/sdk
+├── .env                          ← SUPABASE_*, ANTHROPIC_API_KEY (gitignored); see .env.example
+├── .env.example
+├── .gitignore                    ← node_modules, .env, DECISIONS.md
+├── vercel.json                   ← rewrites to /api/index for deployed viewer + API
 │
 ├── .cursor/
-│   ├── hooks.json                ← registers beforeSubmitPrompt + stop hooks
+│   ├── hooks.json
 │   └── hooks/
-│       ├── on-prompt.js          ← STEP 1: receives prompt via stdin, inserts to DB, returns {continue:true}
-│       └── on-stop.js            ← STEP 4: fetches prompts → scores → updates DB → writes DECISIONS.md → stderr: npm start
+│       ├── on-prompt.js          ← beforeSubmitPrompt → db.insertPrompt (async)
+│       └── on-stop.js            ← stop → intent-resolve → scorer → db → DECISIONS.md
+│
+├── api/
+│   └── index.js                  ← Vercel: Express app (routes + viewer.html)
+│
+├── bin/
+│   └── promptlog.mjs             ← `promptlog init` — hooks + .promptlog/intent.md
+│
+├── supabase/migrations/
+│   └── *.sql                     ← Postgres schema
 │
 ├── promptlog/
-│   ├── db.js                     ← STEP 2: SQLite wrapper (5 exported functions)
-│   ├── scorer.js                 ← STEP 3: export score(prompts, sessionIntent) — one Claude batch, see execution plan
-│   └── server.js                 ← STEP 5: Express, 3 routes, serves viewer.html
+│   ├── load-dotenv.js
+│   ├── db.js                     ← Supabase: 5 async exports
+│   ├── intent-resolve.js         ← SPEC → PRD → README (500) → .promptlog/intent.md
+│   ├── scorer.js                 ← score(prompts, projectIntent)
+│   ├── routes.js                 ← attachPromptlogRoutes(app)
+│   └── server.js                 ← local dev server
 │
-├── viewer.html                   ← STEP 6: self-contained scrubber UI (see CURSOR_EXECUTION_PLAN.md Phase 4)
+├── scripts/
+│   └── verify-persistence.mjs    ← optional; requires Supabase env
 │
-├── CURSOR_EXECUTION_PLAN.md      ← normative phased build + human gates for Cursor agent
-├── SUBMISSION.md                 ← created in Phase 5 (execution plan)
-└── DECISIONS.md                  ← auto-written under workspace root (gitignored per project choice)
+├── viewer.html                   ← self-contained UI
+│
+├── CURSOR_EXECUTION_PLAN.md
+├── SPEC.md
+├── CLAUDE.md
+├── SCORER_PROMPT.md
+└── DECISIONS.md                  ← gitignored (generated)
 ```
 
 ## db.js exports (exactly these 5 functions)
 
+All return Promises (async).
+
 ```js
-export function ensureSchema()                          // create tables if not exists
-export function insertPrompt(sessionId, seq, text, ts)  // insert unscored row, upsert session
-export function getSessionPrompts(sessionId)            // returns all prompts for session, ordered by seq
-export function updatePromptScores(id, scores)          // id = prompts.id (row PK); scores = one object { type, influence, drift, spec_coverage, decision }; call once per scored prompt
-export function getAllSessions()                        // returns sessions ordered by started_at DESC
+export function ensureSchema()
+export async function insertPrompt(sessionId, seq, text, ts)
+export async function getSessionPrompts(sessionId)
+export async function updatePromptScores(id, scores)
+export async function getAllSessions()
 ```
+
+`getAllSessions()` rows include: `project_id`, `project_intent`, `project_repo_path`, `first_prompt_text`, `display_title` (when scored).
 
 ## on-prompt.js stdin payload (from Cursor)
 
@@ -59,23 +82,6 @@ export function getAllSessions()                        // returns sessions orde
 }
 ```
 
-## server.js routes
+## server routes (routes.js)
 
-```
-GET /                         → res.sendFile('viewer.html')
-GET /api/sessions             → db.getAllSessions()
-GET /api/session/:id          → { session, prompts: db.getSessionPrompts(id) }
-```
-
-## viewer.html structure (all in one file, no imports)
-
-```html
-<style>   ← scrubber, cards, timeline styles
-<body>    ← session picker, scrubber, prompt card, state card, decision feed, action buttons
-<script>  ← fetch /api/sessions on load, render, scrubber drag logic, sendPrompt() calls
-```
-
-Seed data object embedded in script for demo fallback:
-```js
-const SEED_SESSION = { session: {...}, prompts: [...8 scored prompts] }
-```
+See [`SPEC.md`](SPEC.md) — `/api/health`, `/api/projects`, `/api/projects/:id/sessions`, `/api/sessions`, `/api/session/:id`, plus `GET /` for `viewer.html` in `server.js` / `api/index.js`.

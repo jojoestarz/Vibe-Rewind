@@ -74,7 +74,7 @@ try {
   // #endregion
 
   const db = await import(new URL('../../promptlog/db.js', import.meta.url));
-  const existing = db.getSessionPrompts(payload.conversation_id);
+  const existing = await db.getSessionPrompts(payload.conversation_id);
   const seq = existing.length + 1;
   const promptTs =
     typeof payload.timestamp === 'number' &&
@@ -89,7 +89,7 @@ try {
     textChars: promptText.length,
     promptKey,
   });
-  db.insertPrompt(payload.conversation_id, seq, promptText, promptTs);
+  await db.insertPrompt(payload.conversation_id, seq, promptText, promptTs);
 
   // #region agent log
   debugLog({

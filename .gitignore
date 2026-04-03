@@ -1,6 +1,4 @@
 .env
 .cursor/hook-debug.log
 node_modules/
-promptlog.db
 DECISIONS.md
-sessions/*.json

@@ -18,6 +18,9 @@
       --reversal: #d85a30;
       --scope_creep: #ba7517;
       --detail: #888780;
+      --edge-stable: #1d9e75;
+      --edge-mid: #d4a017;
+      --edge-spike: #e85d5d;
     }
     * { box-sizing: border-box; }
     body {
@@ -40,6 +43,15 @@
     }
     .header-row .titles { flex: 1 1 12rem; }
     .sub { color: var(--muted); font-size: 0.875rem; margin: 0.35rem 0 0; }
+    .intent-line {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin: 0.5rem 0 0;
+      line-height: 1.4;
+      max-width: 52rem;
+      cursor: help;
+    }
+    .intent-line strong { color: var(--text); font-weight: 500; }
     .live-badge {
       display: inline-flex;
       align-items: center;
@@ -60,9 +72,10 @@
     }
     .live-badge.live .live-dot { background: var(--refinement); box-shadow: 0 0 8px rgba(29, 158, 117, 0.5); }
     label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.35rem; }
+    .pick-row { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem; max-width: 40rem; }
+    .pick-row > div { flex: 1 1 12rem; }
     select {
       width: 100%;
-      max-width: 28rem;
       padding: 0.5rem 0.65rem;
       background: var(--panel);
       color: var(--text);
@@ -230,15 +243,24 @@
     <div class="header-row">
       <div class="titles">
         <h1>Promptlog</h1>
-        <p class="sub" id="headerSub">Review + QA — session replay</p>
+        <p class="sub" id="headerSub">Review + QA — pick a project, then a session</p>
+        <p class="intent-line" id="intentLine" title="" hidden><strong>Intent:</strong> <span id="intentText"></span></p>
       </div>
       <div class="live-badge" id="liveBadge" aria-live="polite">
         <span class="live-dot" aria-hidden="true"></span>
         <span id="liveBadgeText">demo mode</span>
       </div>
     </div>
-    <label for="sessionPick">Session</label>
-    <select id="sessionPick"></select>
+    <div class="pick-row">
+      <div>
+        <label for="projectPick">Project</label>
+        <select id="projectPick"></select>
+      </div>
+      <div>
+        <label for="sessionPick">Session</label>
+        <select id="sessionPick"></select>
+      </div>
+    </div>
   </header>
 
   <div class="constellation-wrap" id="constellationWrap">
@@ -276,30 +298,48 @@
       detail: '#888780',
     };
 
+    const SEED_PROJECT = {
+      id: 'demo-project-001',
+      repo_path: '/projects/my-app',
+      intent_text:
+        'Build a real-time dashboard for tracking Cursor agent sessions with replay, drift visibility, and decision traceability.',
+      session_count: 1,
+      last_started_at: Date.now() - 100000,
+    };
+
     const SEED_SESSION = {
       session: {
         id: 'demo-session-a3f9',
-        name: 'dashboard build',
+        project_id: SEED_PROJECT.id,
+        display_title: 'dashboard build · 3 Apr · 14:32 · 8 prompts',
         started_at: Date.now() - 2200000,
         ended_at: Date.now() - 100000,
         repo: '/projects/my-app',
         prompt_count: 8,
+        project_intent: SEED_PROJECT.intent_text,
+        project_repo_path: SEED_PROJECT.repo_path,
+        first_prompt_text:
+          'build me a dashboard for tracking cursor agent sessions',
       },
       prompts: [
-        { id:1, session_id:'demo-session-a3f9', seq:1, text:'"build me a dashboard for tracking cursor agent sessions"', timestamp: Date.now()-2200000, type:'directive', influence:91, drift:0, spec_coverage:18, decision:'Dashboard for agent sessions established as the top-level product goal.' },
-        { id:2, session_id:'demo-session-a3f9', seq:2, text:'"make it show the files that were changed"', timestamp: Date.now()-1900000, type:'refinement', influence:44, drift:15, spec_coverage:31, decision:'File diff view added as a core feature.' },
-        { id:3, session_id:'demo-session-a3f9', seq:3, text:'"actually can you add a graph like the one we saw earlier"', timestamp: Date.now()-1600000, type:'pivot', influence:78, drift:41, spec_coverage:29, decision:'Graph-based view replaces tabular layout; dashboard framing partially abandoned.' },
-        { id:4, session_id:'demo-session-a3f9', seq:4, text:'"make the nodes draggable"', timestamp: Date.now()-1400000, type:'detail', influence:29, drift:44, spec_coverage:33, decision:'None.' },
-        { id:5, session_id:'demo-session-a3f9', seq:5, text:'"add colour coding for different decision types"', timestamp: Date.now()-1100000, type:'refinement', influence:52, drift:47, spec_coverage:40, decision:'Type-based colour system introduced.' },
-        { id:6, session_id:'demo-session-a3f9', seq:6, text:'"hmm can we also track which cursorrules triggered each one"', timestamp: Date.now()-800000, type:'scope_creep', influence:83, drift:68, spec_coverage:38, decision:'Rules-tracing subsystem scoped in — new feature not in original intent.' },
-        { id:7, session_id:'demo-session-a3f9', seq:7, text:'"nevermind the rules thing, just show the prompt that caused each decision"', timestamp: Date.now()-500000, type:'reversal', influence:95, drift:55, spec_coverage:52, decision:'Rules-tracing killed. Prompt-to-decision linking introduced as the core concept.' },
-        { id:8, session_id:'demo-session-a3f9', seq:8, text:'"add a scrubber so we can replay the session from any point"', timestamp: Date.now()-200000, type:'directive', influence:71, drift:52, spec_coverage:74, decision:'Scrubber/replay metaphor established as the primary UX. Product identity crystallised.' },
+        { id:1, session_id:'demo-session-a3f9', seq:1, text:'"build me a dashboard for tracking cursor agent sessions"', timestamp: Date.now()-2200000, type:'directive', influence:91, drift:12, spec_coverage:22, decision:'Dashboard for agent sessions established as the top-level product goal.' },
+        { id:2, session_id:'demo-session-a3f9', seq:2, text:'"make it show the files that were changed"', timestamp: Date.now()-1900000, type:'refinement', influence:44, drift:18, spec_coverage:35, decision:'File diff view added as a core feature.' },
+        { id:3, session_id:'demo-session-a3f9', seq:3, text:'"actually can you add a graph like the one we saw earlier"', timestamp: Date.now()-1600000, type:'pivot', influence:78, drift:41, spec_coverage:31, decision:'Graph-based view replaces tabular layout; dashboard framing partially abandoned.' },
+        { id:4, session_id:'demo-session-a3f9', seq:4, text:'"make the nodes draggable"', timestamp: Date.now()-1400000, type:'detail', influence:29, drift:44, spec_coverage:36, decision:'None.' },
+        { id:5, session_id:'demo-session-a3f9', seq:5, text:'"add colour coding for different decision types"', timestamp: Date.now()-1100000, type:'refinement', influence:52, drift:47, spec_coverage:44, decision:'Type-based colour system introduced.' },
+        { id:6, session_id:'demo-session-a3f9', seq:6, text:'"hmm can we also track which cursorrules triggered each one"', timestamp: Date.now()-800000, type:'scope_creep', influence:83, drift:68, spec_coverage:40, decision:'Rules-tracing subsystem scoped in — new feature not in original intent.' },
+        { id:7, session_id:'demo-session-a3f9', seq:7, text:'"nevermind the rules thing, just show the prompt that caused each decision"', timestamp: Date.now()-500000, type:'reversal', influence:95, drift:52, spec_coverage:55, decision:'Rules-tracing killed. Prompt-to-decision linking introduced as the core concept.' },
+        { id:8, session_id:'demo-session-a3f9', seq:8, text:'"add a scrubber so we can replay the session from any point"', timestamp: Date.now()-200000, type:'directive', influence:71, drift:48, spec_coverage:78, decision:'Scrubber/replay metaphor established as the primary UX. Product identity crystallised.' },
       ],
+      project: {
+        id: SEED_PROJECT.id,
+        intent_text: SEED_PROJECT.intent_text,
+        repo_path: SEED_PROJECT.repo_path,
+      },
     };
 
     const skipWords = new Set(['a', 'the', 'an', 'can', 'you', 'please', 'just']);
 
-    /** Session date line uses en-GB month abbrev + 24h time for stable demo copy. */
     function formatSessionStart(ms) {
       const d = new Date(ms);
       const day = d.getDate();
@@ -323,10 +363,17 @@
     }
 
     function sessionDisplayLabel(session, firstPromptText) {
-      const name = session.name || twoWordName(firstPromptText ?? session.first_prompt_text ?? '');
+      if (session.display_title) return session.display_title;
+      const name = twoWordName(firstPromptText ?? session.first_prompt_text ?? '');
       const date = formatSessionStart(session.started_at);
       const n = session.prompt_count ?? '?';
       return `${name} · ${date} · ${n} prompts`;
+    }
+
+    function projectDisplayLabel(p) {
+      const path = p.repo_path || p.id || 'project';
+      const short = path.replace(/^.*\//, '') || path;
+      return short + (p.session_count != null ? ` · ${p.session_count} sessions` : '');
     }
 
     function typeColor(t) {
@@ -339,6 +386,13 @@
       const g = parseInt(x.slice(2, 4), 16);
       const b = parseInt(x.slice(4, 6), 16);
       return `rgba(${r},${g},${b},${a})`;
+    }
+
+    function edgeColorForDelta(delta) {
+      const d = Math.abs(delta);
+      if (d < 12) return getComputedStyle(document.documentElement).getPropertyValue('--edge-stable').trim() || '#1d9e75';
+      if (d < 32) return getComputedStyle(document.documentElement).getPropertyValue('--edge-mid').trim() || '#d4a017';
+      return getComputedStyle(document.documentElement).getPropertyValue('--edge-spike').trim() || '#e85d5d';
     }
 
     function influenceBarColor(v) {
@@ -370,16 +424,8 @@
       return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    function getOriginalIntentSource(promptsSorted) {
-      const p1 = promptsSorted.find((p) => p.seq === 1) || promptsSorted[0];
-      if (!p1) return '';
-      const t = String(p1.text || '').trim();
-      const specLike = /^#/.test(t) || /spec:|goal:|intent:/i.test(t);
-      return specLike ? String(p1.text || '') : String(p1.text || '');
-    }
-
     function truncateIntent(s, max) {
-      const m = max ?? 40;
+      const m = max ?? 48;
       if (!s) return '';
       const one = s.replace(/\s+/g, ' ').trim();
       if (one.length <= m) return one;
@@ -402,9 +448,13 @@
       return `${d} ${mon} ${hm}`;
     }
 
+    let projectsList = [];
     let sessionsList = [];
+    let currentProject = null;
     let currentSessionRow = null;
     let currentSessionId = null;
+    let currentProjectIntent = '';
+    let currentSessionBundle = null;
     let prompts = [];
     let selectedIndex = null;
     let hoveredIndex = null;
@@ -413,13 +463,18 @@
     let canvasCssWidth = 400;
     let hoverRaf = null;
     let hoverAnimStart = 0;
+    let mainRaf = null;
+    let pathAnim = null;
+    let pathAnimDone = false;
+    let burstParticles = [];
+    let lastBurstAt = 0;
 
+    const projectPick = document.getElementById('projectPick');
     const sessionPick = document.getElementById('sessionPick');
     const constellationWrap = document.getElementById('constellationWrap');
     const canvas = document.getElementById('constellationCanvas');
     const ctx = canvas.getContext('2d');
     const graphTooltip = document.getElementById('graphTooltip');
-    const detailPanel = document.getElementById('detailPanel');
     const detailPlaceholder = document.getElementById('detailPlaceholder');
     const detailContent = document.getElementById('detailContent');
     const tabDecisions = document.getElementById('tabDecisions');
@@ -427,6 +482,20 @@
     const liveBadge = document.getElementById('liveBadge');
     const liveBadgeText = document.getElementById('liveBadgeText');
     const headerSub = document.getElementById('headerSub');
+    const intentLine = document.getElementById('intentLine');
+    const intentText = document.getElementById('intentText');
+
+    function setIntentHeader(text) {
+      const t = String(text || '').trim();
+      currentProjectIntent = t;
+      if (!t) {
+        intentLine.hidden = true;
+        return;
+      }
+      intentLine.hidden = false;
+      intentLine.title = t;
+      intentText.textContent = truncateIntent(t, 120);
+    }
 
     function sessionAnchorMs() {
       if (!prompts.length) return currentSessionRow?.started_at ?? Date.now();
@@ -452,7 +521,7 @@
     function resizeCanvas() {
       const n = prompts.length;
       const containerW = constellationWrap.clientWidth || 400;
-      canvasCssWidth = Math.max(containerW, n * 90);
+      canvasCssWidth = Math.max(containerW, 90 * Math.max(n, 8));
       const cssH = 320;
       const dpr = window.devicePixelRatio || 1;
       canvas.width = Math.round(canvasCssWidth * dpr);
@@ -461,28 +530,78 @@
       canvas.style.height = cssH + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       computeLayout();
-      drawConstellation();
+      startPathLoadAnim();
+      scheduleMainDraw();
+    }
+
+    function startPathLoadAnim() {
+      pathAnimDone = false;
+      if (prompts.length < 2) {
+        pathAnim = null;
+        pathAnimDone = true;
+        return;
+      }
+      pathAnim = { edgeIdx: 0, t: 0, lastTs: performance.now() };
+    }
+
+    function spawnBurst(x, y, colorHex) {
+      const n = 9;
+      burstParticles = [];
+      for (let i = 0; i < n; i++) {
+        const ang = (Math.PI * 2 * i) / n + Math.random() * 0.4;
+        const sp = 1.2 + Math.random() * 1.8;
+        burstParticles.push({
+          x,
+          y,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp,
+          life: 1,
+          color: colorHex,
+        });
+      }
+      lastBurstAt = performance.now();
     }
 
     function drawConstellation() {
       const w = canvasCssWidth;
       const h = 320;
+      const now = performance.now();
       ctx.clearRect(0, 0, w, h);
       const nodes = layoutNodes;
       if (!nodes.length) return;
 
       const sel = selectedIndex;
+      const atRest = pathAnimDone && burstParticles.length === 0;
 
       for (let i = 0; i < nodes.length - 1; i++) {
         const a = nodes[i];
         const b = nodes[i + 1];
-        const col = typeColor(b.prompt.type);
+        const d0 = a.prompt.drift ?? 0;
+        const d1 = b.prompt.drift ?? 0;
+        const ec = edgeColorForDelta(d1 - d0);
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
-        ctx.strokeStyle = hexToRgba(col, 0.25);
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = hexToRgba(ec, 0.55);
+        ctx.lineWidth = 2;
         ctx.stroke();
+
+        if (pathAnim && pathAnim.edgeIdx === i) {
+          const t = pathAnim.t;
+          const cx = a.x + (b.x - a.x) * t;
+          const cy = a.y + (b.y - a.y) * t;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.globalAlpha = 0.95;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+          ctx.strokeStyle = hexToRgba(ec, 0.8);
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
       }
 
       const anchor = sessionAnchorMs();
@@ -493,7 +612,9 @@
         const { x, y, r, prompt: p } = nodes[i];
         const col = typeColor(p.type);
         const isHover = hoveredIndex === i;
-        const fillA = isHover ? 0.6 : 0.3;
+        const pulse = atRest ? 0.65 + 0.22 * Math.sin(now / 950 + i * 0.85) : 1;
+        let fillA = (isHover ? 0.55 : 0.32) * pulse;
+        if (sel === i) fillA = Math.min(0.85, fillA + 0.2);
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fillStyle = hexToRgba(col, fillA);
@@ -544,18 +665,81 @@
         ctx.stroke();
         ctx.restore();
       }
+
+      for (const pt of burstParticles) {
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba(pt.color, pt.life * 0.9);
+        ctx.fill();
+      }
+    }
+
+    function tickAnim() {
+      const now = performance.now();
+      if (pathAnim && layoutNodes.length > 1) {
+        const dt = Math.min(0.05, (now - pathAnim.lastTs) / 1000);
+        pathAnim.lastTs = now;
+        pathAnim.t += dt * 1.15;
+        if (pathAnim.t >= 1) {
+          pathAnim.t = 0;
+          pathAnim.edgeIdx += 1;
+          if (pathAnim.edgeIdx >= layoutNodes.length - 1) {
+            pathAnim = null;
+            pathAnimDone = true;
+          }
+        }
+      } else if (!pathAnim && !pathAnimDone && prompts.length >= 2) {
+        pathAnimDone = true;
+      }
+
+      if (burstParticles.length) {
+        for (const pt of burstParticles) {
+          pt.x += pt.vx;
+          pt.y += pt.vy;
+          pt.life -= 0.04;
+          pt.vx *= 0.96;
+          pt.vy *= 0.96;
+        }
+        burstParticles = burstParticles.filter((p) => p.life > 0);
+      }
+
+      drawConstellation();
+
+      if (
+        pathAnim ||
+        burstParticles.length ||
+        hoveredIndex != null ||
+        !pathAnimDone
+      ) {
+        mainRaf = requestAnimationFrame(tickAnim);
+      } else {
+        mainRaf = null;
+      }
+    }
+
+    function scheduleMainDraw() {
+      drawConstellation();
+      if (mainRaf != null) return;
+      if (
+        pathAnim ||
+        burstParticles.length ||
+        hoveredIndex != null ||
+        !pathAnimDone
+      ) {
+        mainRaf = requestAnimationFrame(tickAnim);
+      }
     }
 
     function scheduleHoverDraw() {
       if (hoverRaf != null) cancelAnimationFrame(hoverRaf);
       hoverRaf = null;
       if (hoveredIndex == null) {
-        drawConstellation();
+        scheduleMainDraw();
         return;
       }
       hoverAnimStart = performance.now();
       function loop() {
-        drawConstellation();
+        scheduleMainDraw();
         if (hoveredIndex != null) hoverRaf = requestAnimationFrame(loop);
         else hoverRaf = null;
       }
@@ -608,7 +792,7 @@
       if (hoverRaf != null) cancelAnimationFrame(hoverRaf);
       hoverRaf = null;
       graphTooltip.hidden = true;
-      drawConstellation();
+      scheduleMainDraw();
     });
 
     canvas.addEventListener('click', (e) => {
@@ -616,7 +800,11 @@
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
       const idx = hitTest(mx, my);
-      if (idx != null) setSelectedIndex(idx);
+      if (idx != null) {
+        const node = layoutNodes[idx];
+        spawnBurst(node.x, node.y, typeColor(node.prompt.type));
+        setSelectedIndex(idx, true);
+      }
     });
 
     function scrollCanvasToIndex(i) {
@@ -634,11 +822,15 @@
       return sessionDisplayLabel(currentSessionRow, ftp);
     }
 
-    function setSelectedIndex(i) {
+    function setSelectedIndex(i, fromCanvasClick) {
       if (!prompts.length) return;
       selectedIndex = Math.max(0, Math.min(prompts.length - 1, i));
       scrollCanvasToIndex(selectedIndex);
-      drawConstellation();
+      if (!fromCanvasClick && layoutNodes[selectedIndex]) {
+        const n = layoutNodes[selectedIndex];
+        spawnBurst(n.x, n.y, typeColor(n.prompt.type));
+      }
+      scheduleMainDraw();
       renderDetail();
       renderTabs();
       headerSub.textContent = currentSessionLabel();
@@ -659,14 +851,13 @@
       const d = p.drift ?? 0;
       const sc = p.spec_coverage ?? 0;
       const pr = pivotRisk(d);
-      const intentSrc = getOriginalIntentSource(prompts);
-      const intentShort = truncateIntent(intentSrc, 40);
-      const sessLbl = currentSessionLabel();
+      const intentSrc = currentProjectIntent || '';
+      const intentShort = truncateIntent(intentSrc, 42);
 
       detailContent.innerHTML = `
         <div class="detail-col">
           <h3>Prompt</h3>
-          <div class="detail-head">${escapeHtml(sessLbl)} · P${p.seq}</div>
+          <div class="detail-head">${escapeHtml(currentSessionLabel())} · P${p.seq}</div>
           <span class="badge" style="background:${typeColor(p.type)}22;color:${typeColor(p.type)}">${escapeHtml(p.type || '—')}</span>
           <div class="prompt-text">${escapeHtml(String(p.text))}</div>
           <div class="meta">${p.timestamp ? escapeHtml(new Date(p.timestamp).toLocaleString()) : ''}</div>
@@ -690,7 +881,9 @@
     function renderTabs() {
       const selSeq = selectedIndex != null ? prompts[selectedIndex]?.seq : null;
       tabDecisions.innerHTML = '';
-      prompts.forEach((p, idx) => {
+      const decisions = prompts.filter((p) => (p.influence ?? 0) >= 40);
+      decisions.forEach((p) => {
+        const idx = prompts.indexOf(p);
         const row = document.createElement('div');
         row.className = 'tab-row' + (p.seq === selSeq ? ' selected' : '');
         row.dataset.index = String(idx);
@@ -699,7 +892,7 @@
         dot.style.background = typeColor(p.type);
         const main = document.createElement('div');
         main.className = 'row-main';
-        main.innerHTML = `<strong>P${p.seq} · ${escapeHtml(p.type || '—')}</strong><div class="row-sub">${escapeHtml(String(p.decision || '—'))}</div>`;
+        main.innerHTML = `<strong>P${p.seq} · ${escapeHtml(p.type || '—')} · ${p.influence ?? 0}%</strong><div class="row-sub">${escapeHtml(String(p.decision || '—'))}</div>`;
         row.appendChild(dot);
         row.appendChild(main);
         row.addEventListener('click', () => setSelectedIndex(idx));
@@ -720,9 +913,7 @@
         main.innerHTML = `<strong>P${p.seq}</strong> <span class="badge" style="font-size:0.65rem;padding:0.1rem 0.35rem;background:${typeColor(p.type)}22;color:${typeColor(p.type)}">${escapeHtml(p.type || '—')}</span><div class="row-sub">${escapeHtml(ts)} — ${escapeHtml(preview)}</div>`;
         row.appendChild(dot);
         row.appendChild(main);
-        row.addEventListener('click', () => {
-          setSelectedIndex(idx);
-        });
+        row.addEventListener('click', () => setSelectedIndex(idx));
         tabPrompts.appendChild(row);
       });
     }
@@ -742,21 +933,63 @@
       });
     });
 
-    async function loadSessions() {
+    async function loadProjectsAndSessions() {
       useSeed = false;
       liveBadge.classList.remove('live');
       liveBadgeText.textContent = 'demo mode';
+      projectsList = [];
+      sessionsList = [];
+
       try {
-        const r = await fetch('/api/sessions');
-        if (!r.ok) throw new Error('bad status');
-        sessionsList = await r.json();
-        if (!Array.isArray(sessionsList) || sessionsList.length === 0) throw new Error('empty');
+        const h = await fetch('/api/health');
+        if (!h.ok) throw new Error('health');
+        const pr = await fetch('/api/projects');
+        if (!pr.ok) throw new Error('projects');
+        projectsList = await pr.json();
+        if (!Array.isArray(projectsList)) throw new Error('shape');
         liveBadge.classList.add('live');
         liveBadgeText.textContent = 'live';
       } catch {
         useSeed = true;
-        sessionsList = [SEED_SESSION.session];
+        projectsList = [SEED_PROJECT];
       }
+
+      projectPick.innerHTML = '';
+      projectsList.forEach((p) => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = projectDisplayLabel(p);
+        projectPick.appendChild(opt);
+      });
+
+      if (!projectsList.length) {
+        sessionPick.innerHTML = '';
+        setIntentHeader('');
+        return;
+      }
+
+      projectPick.value = projectsList[0].id;
+      await onProjectChange();
+    }
+
+    async function onProjectChange() {
+      const pid = projectPick.value;
+      currentProject = projectsList.find((p) => p.id === pid) || null;
+      const intentFromList = currentProject?.intent_text ?? '';
+      setIntentHeader(intentFromList);
+
+      if (useSeed && pid === SEED_PROJECT.id) {
+        sessionsList = [SEED_SESSION.session];
+      } else {
+        try {
+          const r = await fetch('/api/projects/' + encodeURIComponent(pid) + '/sessions');
+          if (!r.ok) throw new Error('bad');
+          sessionsList = await r.json();
+        } catch {
+          sessionsList = [];
+        }
+      }
+
       sessionPick.innerHTML = '';
       sessionsList.forEach((s) => {
         const opt = document.createElement('option');
@@ -764,18 +997,34 @@
         opt.textContent = sessionDisplayLabel(s, s.first_prompt_text);
         sessionPick.appendChild(opt);
       });
+
       if (sessionsList.length) {
-        currentSessionId = sessionsList[0].id;
-        sessionPick.value = currentSessionId;
-        await loadSessionData(currentSessionId);
+        sessionPick.value = sessionsList[0].id;
+        await loadSessionData(sessionPick.value);
+      } else {
+        currentSessionRow = null;
+        currentSessionId = null;
+        prompts = [];
+        selectedIndex = null;
+        detailPlaceholder.style.display = 'block';
+        detailContent.style.display = 'none';
+        resizeCanvas();
+        renderTabs();
       }
     }
 
     async function loadSessionData(id) {
+      currentSessionId = id;
       currentSessionRow = sessionsList.find((s) => s.id === id) || null;
       selectedIndex = null;
+      currentSessionBundle = null;
+      pathAnimDone = false;
+
       if (useSeed && id === SEED_SESSION.session.id) {
         prompts = [...SEED_SESSION.prompts].sort((a, b) => a.seq - b.seq);
+        currentSessionRow = SEED_SESSION.session;
+        currentSessionBundle = SEED_SESSION;
+        setIntentHeader(SEED_SESSION.project?.intent_text ?? currentProjectIntent);
       } else {
         try {
           const r = await fetch('/api/session/' + encodeURIComponent(id));
@@ -783,22 +1032,32 @@
           const data = await r.json();
           prompts = (data.prompts || []).slice().sort((a, b) => a.seq - b.seq);
           if (data.session) currentSessionRow = data.session;
+          currentSessionBundle = data;
+          if (data.project?.intent_text) {
+            setIntentHeader(data.project.intent_text);
+          }
         } catch {
           prompts = [];
         }
       }
+
       detailPlaceholder.style.display = 'block';
       detailContent.style.display = 'none';
       detailContent.innerHTML = '';
-      headerSub.textContent = currentSessionRow ? sessionDisplayLabel(currentSessionRow, currentSessionRow.first_prompt_text ?? prompts[0]?.text) : 'Review + QA — session replay';
+      headerSub.textContent = currentSessionRow
+        ? sessionDisplayLabel(currentSessionRow, currentSessionRow.first_prompt_text ?? prompts[0]?.text)
+        : 'Review + QA — pick a session';
       resizeCanvas();
       renderTabs();
-      drawConstellation();
+      scheduleMainDraw();
     }
 
+    projectPick.addEventListener('change', () => {
+      onProjectChange();
+    });
+
     sessionPick.addEventListener('change', () => {
-      currentSessionId = sessionPick.value;
-      loadSessionData(currentSessionId);
+      loadSessionData(sessionPick.value);
     });
 
     window.addEventListener('resize', () => {
@@ -849,7 +1108,7 @@
       sendPrompt('where did this session start to drift from the original spec?');
     };
 
-    loadSessions();
+    loadProjectsAndSessions();
   </script>
 </body>
 </html>
