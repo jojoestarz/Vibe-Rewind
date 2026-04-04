@@ -13,7 +13,7 @@ If any of these are missing, ask the user to restore them before coding.
 ## Constraints
 
 - Node.js + plain JS only. No TypeScript, no bundler, no framework beyond Express.
-- **No per-prompt Claude calls.** One batch call at session end (`on-stop.js` → `scorer.score`).
+- **No per-prompt Gemini calls.** One batch call at session end (`on-stop.js` → `scorer.score`).
 - `viewer.html`: one self-contained file, no imports, no build step.
 - **`promptlog/db.js` only** talks to Supabase (`@supabase/supabase-js`); everyone else imports from it.
 - **`on-prompt.js`** must stdout `{ "continue": true }` immediately; wrap in try/catch (async `await` for DB is OK).
@@ -26,7 +26,7 @@ If any of these are missing, ask the user to restore them before coding.
 ## Escape hatches
 
 - Supabase env missing → `db.js` logs errors; hooks still return `{ continue: true }`.
-- Claude unavailable / bad JSON → mock scores in `scorer.js` (never throw).
+- Gemini unavailable / bad JSON → mock scores in `scorer.js` (never throw).
 - Viewer `fetch` fails → `SEED_SESSION` / `SEED_PROJECT` in `viewer.html` (execution plan).
 
 ## Local viewer in Cursor

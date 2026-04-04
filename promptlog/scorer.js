@@ -1,5 +1,7 @@
 import './load-dotenv.js';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
 
 const INFLUENCE_HINT_PHRASES = [
   'actually',
@@ -44,8 +46,8 @@ Format: [{"seq":1,"type":"...","influence":0,"drift":0,"spec_coverage":0,"decisi
 function mockScores(prompts, reason = 'api') {
   const decision =
     reason === 'no_key'
-      ? 'Mock score — ANTHROPIC_API_KEY missing; add it to .env in the repo root (same folder as promptlog/).'
-      : 'Mock score — Claude request failed (billing/credits, network, or invalid model JSON). Check Cursor hook stderr for the real error.';
+      ? 'Mock score — GEMINI_API_KEY missing; add it to .env in the repo root (same folder as promptlog/).'
+      : 'Mock score — Gemini failed (see Hooks stderr for "Promptlog scorer:" lines: quota, model name, safety block, or bad JSON shape).';
   return prompts.map((p) => ({
     seq: p.seq,
     type: 'detail',
@@ -88,9 +90,17 @@ function asFiniteNumber(v) {
   return NaN;
 }
 
+function normalizedSeq(r) {
+  const n = asFiniteNumber(r?.seq);
+  return Number.isFinite(n) && Number.isInteger(n) && n >= 1 ? n : NaN;
+}
+
 function scoreRowLooksValid(r) {
-  if (!r || typeof r.seq !== 'number') return false;
-  if (!TYPES.has(String(r.type))) return false;
+  if (!r || !Number.isFinite(normalizedSeq(r))) return false;
+  const typeKey = String(r.type || '')
+    .trim()
+    .toLowerCase();
+  if (!TYPES.has(typeKey)) return false;
   for (const k of ['influence', 'drift', 'spec_coverage']) {
     if (!Number.isFinite(asFiniteNumber(r[k]))) return false;
   }
@@ -100,8 +110,10 @@ function scoreRowLooksValid(r) {
 
 function normalizeScoreRow(r) {
   return {
-    seq: r.seq,
-    type: String(r.type),
+    seq: normalizedSeq(r),
+    type: String(r.type || '')
+      .trim()
+      .toLowerCase(),
     influence: asFiniteNumber(r.influence),
     drift: asFiniteNumber(r.drift),
     spec_coverage: asFiniteNumber(r.spec_coverage),
@@ -111,7 +123,9 @@ function normalizeScoreRow(r) {
 
 function scoresCoverBatch(batch, arr) {
   if (!Array.isArray(arr)) return false;
-  const bySeq = new Map(arr.map((r) => [r.seq, r]));
+  const bySeq = new Map(
+    arr.map((r) => [normalizedSeq(r), r]).filter(([s]) => Number.isFinite(s))
+  );
   return batch.every((p) => scoreRowLooksValid(bySeq.get(p.seq)));
 }
 
@@ -128,10 +142,10 @@ export async function score(prompts, projectIntent) {
     influence_hints: influenceHintsForText(p.text),
   }));
 
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
     console.error(
-      'Promptlog scorer: ANTHROPIC_API_KEY missing after loading repo .env — check .env in repo root (next to promptlog/).'
+      'Promptlog scorer: GEMINI_API_KEY missing after loading repo .env — check .env in repo root (next to promptlog/).'
     );
     return mockScores(prompts, 'no_key');
   }
@@ -141,45 +155,80 @@ export async function score(prompts, projectIntent) {
       ? String(projectIntent).trim()
       : '(no project intent file — treat drift relative to an empty anchor and prefer conservative scores)';
 
+  const modelId =
+    process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
+
   try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: JSON.stringify({
-            project_intent: intent,
-            prompts: batch,
-          }),
-        },
-      ],
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: modelId,
+      systemInstruction: SYSTEM_PROMPT,
+      generationConfig: {
+        maxOutputTokens: 2000,
+      },
     });
 
-    const block = response.content[0];
-    if (block.type !== 'text') {
-      console.error('Promptlog scorer: expected text block, got', block?.type);
+    const userPayload = JSON.stringify({
+      project_intent: intent,
+      prompts: batch,
+    });
+
+    const response = await model.generateContent(userPayload);
+    const fb = response.response?.promptFeedback;
+    if (fb?.blockReason) {
+      console.error(
+        'Promptlog scorer: prompt blocked:',
+        fb.blockReason,
+        fb.blockReasonMessage || ''
+      );
       return mockScores(prompts, 'api');
     }
+
+    let rawText;
+    try {
+      rawText = response.response.text();
+    } catch (e) {
+      console.error(
+        'Promptlog scorer: no text in response:',
+        e?.message || e
+      );
+      return mockScores(prompts, 'api');
+    }
+
+    if (!rawText || !String(rawText).trim()) {
+      console.error('Promptlog scorer: empty model response text');
+      return mockScores(prompts, 'api');
+    }
+
     let arr;
     try {
-      arr = parseScoresArray(block.text);
+      arr = parseScoresArray(rawText);
     } catch (e) {
       console.error('Promptlog scorer: JSON parse failed:', e?.message || e);
       return mockScores(prompts, 'api');
     }
     if (!scoresCoverBatch(prompts, arr)) {
+      const expected = prompts.map((p) => p.seq).join(',');
       console.error(
-        'Promptlog scorer: model JSON missing seqs or invalid fields; first 200 chars:',
-        String(block.text).slice(0, 200)
+        'Promptlog scorer: model JSON missing seqs or invalid fields (expected seq:',
+        expected,
+        '). First 400 chars:',
+        String(rawText).slice(0, 400)
       );
       return mockScores(prompts, 'api');
     }
     return arr.map((r) => normalizeScoreRow(r));
   } catch (e) {
-    console.error('Promptlog scorer:', e?.message || e);
+    const msg = e?.message || String(e);
+    console.error(
+      'Promptlog scorer: request error (model:',
+      modelId,
+      '):',
+      msg
+    );
+    if (e?.status) console.error('Promptlog scorer: HTTP status', e.status);
+    if (e?.errorDetails)
+      console.error('Promptlog scorer: errorDetails', e.errorDetails);
     return mockScores(prompts, 'api');
   }
 }

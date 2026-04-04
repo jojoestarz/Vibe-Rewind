@@ -20,7 +20,7 @@ Developers enter "vibe hell": shipping code without knowing which prompt caused 
 **Promptlog** is a Cursor-native **session review and QA** tool:
 
 1. **Captures** every prompt via Cursor Hooks (`beforeSubmitPrompt`, `stop`) — see non-goals for response capture
-2. **Scores** each prompt at session end via a single Claude API call — influence, drift, type, decision
+2. **Scores** each prompt at session end via a single Gemini API call — influence, drift, type, decision
 3. **Replays** the session as an interactive scrubber showing the full decision graph
 4. **Writes** a structured `DECISIONS.md` to the repo automatically (evidence in-tree)
 5. **Persists** sessions to SQLite for multi-session history
@@ -36,12 +36,12 @@ It supports the **Review + QA** track by providing a **review loop** on the prom
   hooks.json              ← registers hooks with Cursor
   hooks/
     on-prompt.js          ← beforeSubmitPrompt → append row via Supabase (db.js)
-    on-stop.js            ← stop → resolve project intent → score via Claude → sync intent → DECISIONS.md
+    on-stop.js            ← stop → resolve project intent → score via Gemini → sync intent → DECISIONS.md
 
 promptlog/
   db.js                   ← Supabase only (projects, sessions, prompts)
   intent-resolve.js       ← SPEC.md → PRD.md → README (500 chars) → .promptlog/intent.md
-  scorer.js               ← Claude API batch scoring (project_intent + influence_hints)
+  scorer.js               ← Gemini API batch scoring (project_intent + influence_hints)
   routes.js               ← Express route table (shared with Vercel api/index.js)
   server.js               ← local Express + static viewer
   load-dotenv.js
@@ -70,8 +70,8 @@ User ends session (Cursor stop event)
   → stop hook fires  
   → on-stop.js fetches all unscored prompts for conversation_id
   → resolves **project intent** (SPEC → PRD → README → `.promptlog/intent.md`, else first prompt) and syncs to `projects.intent_text`
-  → calls scorer.js → single Claude API call (claude-sonnet-4-6) with `project_intent` and per-prompt `influence_hints`
-  → Claude returns structured JSON array of scored prompts
+  → calls scorer.js → single Gemini API call (default `gemini-2.5-flash`, overridable via `GEMINI_MODEL`) with `project_intent` and per-prompt `influence_hints`
+  → Gemini returns structured JSON array of scored prompts
   → UPDATE each prompt row with scores
   → UPDATE sessions row with `ended_at` and `display_title` when all prompts scored
   → write DECISIONS.md under workspace_roots[0]
@@ -92,14 +92,14 @@ See [`supabase/migrations/20260403120000_promptlog.sql`](supabase/migrations/202
 
 ---
 
-## Claude scoring call (scorer.js)
+## Gemini scoring call (scorer.js)
 
 Single batch call at session end. Never called per-prompt.
 
 **Export:** `score(prompts, projectIntent)` where `prompts` is `{ seq, text }[]` and `projectIntent` is the fixed repo anchor string. The implementation attaches **`influence_hints`** per prompt before the API call (see [`promptlog/scorer.js`](promptlog/scorer.js)).
 
-**Model:** `claude-sonnet-4-6`  
-**Max tokens:** 2000  
+**Model:** `gemini-2.5-flash` by default (`GEMINI_MODEL` in `.env` to override)  
+**Max output tokens:** 2000  
 
 **System prompt:** Copy **verbatim** from [`CURSOR_EXECUTION_PLAN.md`](CURSOR_EXECUTION_PLAN.md) Phase 2 (kept in sync in [`SCORER_PROMPT.md`](SCORER_PROMPT.md)). Do not paraphrase in `scorer.js`.
 
@@ -204,9 +204,9 @@ Only prompts with `influence >= 40` are written. Low-influence detail prompts ar
 
 | Time | Task | Escape hatch |
 |---|---|---|
-| 0:00–0:30 | Scaffold repo, `npm init`, install `@supabase/supabase-js` + `express` + `@anthropic-ai/sdk`. Apply Supabase migration. Wire `hooks.json`. | — |
+| 0:00–0:30 | Scaffold repo, `npm init`, install `@supabase/supabase-js` + `express` + `@google/generative-ai`. Apply Supabase migration. Wire `hooks.json`. | — |
 | 0:30–1:15 | `db.js` — Supabase client, `ensureSchema` noop, five async exports | Set `SUPABASE_*` in `.env` |
-| 1:15–2:00 | `scorer.js` — Claude API call, parse JSON response, return array | Hardcode mock scores for demo |
+| 1:15–2:00 | `scorer.js` — Gemini API call, parse JSON response, return array | Hardcode mock scores for demo |
 | 2:00–2:30 | `on-stop.js` — full pipeline: fetch unscored → score → update DB → write DECISIONS.md → stderr hint to run server | — |
 | 2:30–3:15 | `server.js` — 3 routes + static viewer serving | — |
 | 3:15–4:30 | `viewer.html` — port scrubber widget, wire to `/api/session/:id`, session picker, demo fallback seed | — |
@@ -237,7 +237,8 @@ Scan each captured prompt for injection patterns using White Circle's API. Surfa
 ```
 SUPABASE_URL=https://....supabase.co
 SUPABASE_SERVICE_ROLE_KEY=...    # server + Cursor hooks (keep secret)
-ANTHROPIC_API_KEY=sk-ant-...     # required for real scores in scorer.js
+GEMINI_API_KEY=...               # Google AI Studio; required for real scores in scorer.js
+# GEMINI_MODEL=gemini-2.5-flash  # optional override
 PROMPTLOG_PORT=3000              # optional, defaults to 3000
 ```
 

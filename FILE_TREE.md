@@ -5,8 +5,8 @@ Every primary file, in rough dependency order.
 ```
 promptlog/                        ← git repo root
 │
-├── package.json                  ← { "type": "module" }, bin: promptlog, deps: express, @supabase/supabase-js, @anthropic-ai/sdk
-├── .env                          ← SUPABASE_*, ANTHROPIC_API_KEY (gitignored); see .env.example
+├── package.json                  ← { "type": "module" }, bin: promptlog, deps: express, @supabase/supabase-js, @google/generative-ai
+├── .env                          ← SUPABASE_*, GEMINI_API_KEY (gitignored); see .env.example
 ├── .env.example
 ├── .gitignore                    ← node_modules, .env, DECISIONS.md
 ├── vercel.json                   ← rewrites to /api/index for deployed viewer + API

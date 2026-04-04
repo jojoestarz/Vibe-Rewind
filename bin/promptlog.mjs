@@ -86,7 +86,9 @@ async function main() {
     }
   }
 
-  console.log('promptlog init done. Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and ANTHROPIC_API_KEY in .env.');
+  console.log(
+    'promptlog init done. Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and GEMINI_API_KEY in .env (optional GEMINI_MODEL).'
+  );
 }
 
 main().catch((e) => {

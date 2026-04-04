@@ -1,4 +1,4 @@
-# Claude scoring prompt (copy-paste ready)
+# Gemini scoring prompt (copy-paste ready)
 
 Canonical scoring rules live in [`promptlog/scorer.js`](promptlog/scorer.js) (`SYSTEM_PROMPT`) and Phase 2 of [`CURSOR_EXECUTION_PLAN.md`](CURSOR_EXECUTION_PLAN.md). Keep this file in sync.
 

@@ -11,7 +11,7 @@ Do not write any code until you have confirmed your understanding of the build o
 ## Constraints (enforce throughout)
 
 - Node.js + plain JS only. No TypeScript, no bundler, no framework beyond Express.
-- Never call the Claude API per-prompt. One batch call at session end in `on-stop.js` only.
+- Never call the Gemini API per-prompt. One batch call at session end in `on-stop.js` only.
 - `viewer.html` must be a single self-contained file with no imports and no build step.
 - `db.js` is the only file that talks to Supabase. All other files import from it.
 - `on-prompt.js` must write `{ "continue": true }` to stdout after `insertPrompt` resolves (keep the hook fast; never throw unhandled).
@@ -28,7 +28,7 @@ Do all of this before writing any application code.
 1. Set `"type": "module"` in `package.json`.
 2. Add `"start": "node promptlog/server.js"` to the `scripts` section of `package.json`.
 3. Create `.gitignore` with these entries: `.env`, `node_modules/`, `DECISIONS.md`
-4. Run: `npm install express @supabase/supabase-js @anthropic-ai/sdk`
+4. Run: `npm install express @supabase/supabase-js @google/generative-ai`
 5. Create a Supabase project, run SQL from `supabase/migrations/`, set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env` (see `.env.example`).
 6. Confirm installs succeeded before continuing.
 
@@ -97,7 +97,7 @@ Export a single async function: `score(prompts, projectIntent)`
 - `prompts` is an array of `{ seq, text }` objects (unscored batch).
 - `projectIntent` is the fixed drift anchor string (from [`promptlog/intent-resolve.js`](promptlog/intent-resolve.js) or fallback).
 - Before the API call, compute **`influence_hints`** per prompt (keyword flags: actually, wait, nevermind, hmm, can we instead, forget, scrap, ignore that).
-- Makes one call to the Claude API using `claude-sonnet-4-6` with `max_tokens` 2000.
+- Makes one call to the Gemini API using `gemini-2.5-flash` by default (`GEMINI_MODEL` env override) with `maxOutputTokens` 2000.
 - **System prompt and drift/spec rules:** copy verbatim from [`promptlog/scorer.js`](promptlog/scorer.js) `SYSTEM_PROMPT` (kept in sync with [`SCORER_PROMPT.md`](SCORER_PROMPT.md)).
 - User message: `JSON.stringify({ project_intent, prompts: [{ seq, text, influence_hints }, ...] })`
 - Parse the response text as JSON. If parsing fails, return mock scores (never throw).
@@ -213,7 +213,7 @@ Wait for confirmation before continuing.
 
 Do this only after Phase 4 gate has passed.
 
-1. Test the mock fallback: temporarily set `ANTHROPIC_API_KEY=invalid` in the environment, run a session end, confirm `DECISIONS.md` still writes with mock scores, then restore the real key.
+1. Test the mock fallback: temporarily set `GEMINI_API_KEY=invalid` in the environment, run a session end, confirm `DECISIONS.md` still writes with mock scores, then restore the real key.
 2. With valid Supabase env, run `npm run verify:persistence` (or confirm manually in the Supabase dashboard).
 3. Verify [`SPEC.md`](SPEC.md) track alignment says **Main road: Review + QA** (update if it does not).
 4. Create `SUBMISSION.md` in the repo root with this content:
@@ -226,7 +226,7 @@ Do this only after Phase 4 gate has passed.
 
 Promptlog is the quality gate vibe coding never had.
 
-It captures every prompt from a Cursor session via Cursor Hooks v1.7, scores each one for influence, drift, and spec coverage using Claude, then replays the full session as an interactive scrubber. DECISIONS.md is written to the repo automatically at session end so you always know how you got there.
+It captures every prompt from a Cursor session via Cursor Hooks v1.7, scores each one for influence, drift, and spec coverage using Gemini, then replays the full session as an interactive scrubber. DECISIONS.md is written to the repo automatically at session end so you always know how you got there.
 
 Built entirely on Cursor Hooks — two JS files and a hooks.json. No proxy, no extension manifest, no external scraping.
 ```
@@ -267,6 +267,6 @@ You can also run `npm run verify:persistence` (or `node scripts/verify-persisten
 
 - Hook not firing: check `.cursor/hooks.json` is valid JSON, restart Cursor, check the Hooks output channel in Cursor's Output panel.
 - Supabase errors: check `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` in `.env` (repo root) and hook stderr.
-- Claude API returns invalid JSON: `scorer.js` returns mock scores automatically.
+- Gemini API returns invalid JSON: `scorer.js` returns mock scores automatically.
 - Server port taken: set `PROMPTLOG_PORT=3001` in `.env`.
 - `viewer.html` fetch fails: it falls back to `SEED_SESSION` automatically.
